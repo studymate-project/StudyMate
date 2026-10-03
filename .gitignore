@@ -1,0 +1,21 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+.venv/
+venv/
+env/
+staticfiles/
+
+# JavaScript
+frontend/node_modules/
+frontend/dist/
+
+# Tooling and operating system files
+.DS_Store
+*.log

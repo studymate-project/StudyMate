@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+<title id="title">StudyMate Logo</title>
+<desc id="desc">Modern StudyMate learning platform logo with an open book and learning spark.</desc>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#32127A"/><stop offset="1" stop-color="#5125D6"/></linearGradient>
+<linearGradient id="book" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4B2BCB"/><stop offset="1" stop-color="#765BFF"/></linearGradient>
+</defs>
+<rect width="512" height="512" rx="112" fill="#263746"/>
+<rect x="34" y="34" width="444" height="444" rx="96" fill="url(#bg)"/>
+<path d="M256 83c8 27 19 38 46 46-27 8-38 19-46 46-8-27-19-38-46-46 27-8 38-19 46-46Z" fill="#fff"/>
+<path d="M105 211c47-28 94-25 151 8v169c-57-33-104-36-151-8V211Z" fill="url(#book)" stroke="#AFA2FF" stroke-width="9" stroke-linejoin="round"/>
+<path d="M407 211c-47-28-94-25-151 8v169c57-33 104-36 151-8V211Z" fill="url(#book)" stroke="#AFA2FF" stroke-width="9" stroke-linejoin="round"/>
+<path d="M256 219v169" stroke="#D7D1FF" stroke-width="8" stroke-linecap="round"/>
+<path d="M132 249c34-12 67-8 98 7M132 283c34-12 67-8 98 7M132 317c34-12 67-8 98 7M380 249c-34-12-67-8-98 7M380 283c-34-12-67-8-98 7M380 317c-34-12-67-8-98 7" fill="none" stroke="#E8E5FF" stroke-width="8" stroke-linecap="round"/>
+<circle cx="118" cy="397" r="11" fill="#24C7B5"/><circle cx="394" cy="397" r="11" fill="#24C7B5"/>
+<path d="M129 397h64M319 397h64" stroke="#24C7B5" stroke-width="7" stroke-linecap="round"/>
+</svg>

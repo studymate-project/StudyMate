@@ -1,0 +1,243 @@
+{
+  "info": {
+    "name": "StudyMate API",
+    "description": "Postman verification collection for the currently implemented Django API. Set the StudyMate Local environment before use. Run Login first; its test script captures access and refresh cookie values into environment variables. Protected requests use the supported Bearer access-token mechanism. Cookie refresh/logout requests also require a CSRF token because the existing API enforces CSRF for unsafe cookie requests.\n\nSearch/Filtering uses the implemented resource query parameters under /api/resources/. No separate /api/search/ endpoint is included because that route is not currently implemented.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Health — 200",
+          "request": {"method": "GET", "url": "{{base_url}}/health/"},
+          "description": "Public deployment health check."
+        },
+        {
+          "name": "Signup — 201",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"name\": \"{{signup_name}}\",\n  \"email\": \"{{signup_email}}\",\n  \"password\": \"{{signup_password}}\",\n  \"college\": \"{{college_name}}\",\n  \"course\": \"{{course_name}}\",\n  \"semester\": \"{{level_name}}\"\n}", "options": {"raw": {"language": "json"}}},
+            "url": "{{base_url}}/auth/signup/"
+          },
+          "description": "Public registration. Use catalog names from the active education endpoints."
+        },
+        {
+          "name": "Signup missing required data — 400",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{signup_email}}\"\n}", "options": {"raw": {"language": "json"}}},
+            "url": "{{base_url}}/auth/signup/"
+          }
+        },
+        {
+          "name": "Login — 200",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+            "var accessName = pm.environment.get('access_cookie_name') || 'studymate_access';",
+            "var refreshName = pm.environment.get('refresh_cookie_name') || 'studymate_refresh';",
+            "pm.response.headers.all().filter(function (header) { return header.key.toLowerCase() === 'set-cookie'; }).forEach(function (header) {",
+            "  var match = header.value.match(new RegExp('^(' + accessName + '|' + refreshName + ')=([^;]+)'));",
+            "  if (!match) return;",
+            "  var variable = match[1] === accessName ? 'access_token' : 'refresh_token';",
+            "  pm.environment.set(variable, decodeURIComponent(match[2]));",
+            "});"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{login_email}}\",\n  \"password\": \"{{login_password}}\"\n}", "options": {"raw": {"language": "json"}}},
+            "url": "{{base_url}}/auth/login/"
+          },
+          "description": "Login sets HTTP-only access and refresh cookies. The script also stores their values for Bearer and cookie requests."
+        },
+        {
+          "name": "Login invalid credentials — 401",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{login_email}}\",\n  \"password\": \"definitely-wrong\"\n}", "options": {"raw": {"language": "json"}}},
+            "url": "{{base_url}}/auth/login/"
+          }
+        },
+        {
+          "name": "Current user — 200",
+          "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/auth/me/"}
+        },
+        {
+          "name": "Current user without authentication — 401",
+          "request": {"method": "GET", "auth": {"type": "noauth"}, "url": "{{base_url}}/auth/me/"}
+        },
+        {
+          "name": "Refresh access cookie — 200",
+          "request": {"method": "POST", "header": [{"key": "Cookie", "value": "{{refresh_cookie_name}}={{refresh_token}}; csrftoken={{csrf_token}}"}, {"key": "X-CSRFToken", "value": "{{csrf_token}}"}], "url": "{{base_url}}/auth/refresh/"}
+        },
+        {
+          "name": "Refresh invalid token — 401",
+          "request": {"method": "POST", "header": [{"key": "Cookie", "value": "{{refresh_cookie_name}}=invalid; csrftoken={{csrf_token}}"}, {"key": "X-CSRFToken", "value": "{{csrf_token}}"}], "url": "{{base_url}}/auth/refresh/"}
+        },
+        {
+          "name": "Logout — 204",
+          "request": {"method": "POST", "header": [{"key": "Cookie", "value": "{{access_cookie_name}}={{access_token}}; {{refresh_cookie_name}}={{refresh_token}}; csrftoken={{csrf_token}}"}, {"key": "X-CSRFToken", "value": "{{csrf_token}}"}], "url": "{{base_url}}/auth/logout/"}
+        }
+      ]
+    },
+    {
+      "name": "Users/Profile",
+      "item": [
+        {"name": "List profiles — 200", "request": {"method": "GET", "url": "{{base_url}}/users/"}},
+        {"name": "Profile detail — 200", "request": {"method": "GET", "url": "{{base_url}}/users/{{user_username}}/"}},
+        {"name": "Unknown profile — 404", "request": {"method": "GET", "url": "{{base_url}}/users/does-not-exist/"}}
+      ]
+    },
+    {
+      "name": "Education/Onboarding",
+      "item": [
+        {"name": "Backgrounds — 200", "request": {"method": "GET", "url": "{{base_url}}/education/backgrounds/"}},
+        {"name": "Courses by background — 200", "request": {"method": "GET", "url": "{{base_url}}/education/courses/?background={{background_slug}}"}},
+        {"name": "Levels by course — 200", "request": {"method": "GET", "url": "{{base_url}}/education/levels/?course={{course_slug}}"}},
+        {"name": "Interests by course — 200", "request": {"method": "GET", "url": "{{base_url}}/education/interests/?course={{course_slug}}"}},
+        {
+          "name": "Submit onboarding — 200",
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"education_background\": {{background_id}},\n  \"course\": {{course_id}},\n  \"academic_level\": {{academic_level_id}},\n  \"interests\": [{{interest_id}}]\n}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/users/onboarding/"}
+        },
+        {
+          "name": "Onboarding missing field — 400",
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"education_background\": {{background_id}},\n  \"course\": {{course_id}},\n  \"academic_level\": {{academic_level_id}}\n}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/users/onboarding/"}
+        },
+        {
+          "name": "Onboarding invalid relationship — 400",
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"education_background\": {{background_id}},\n  \"course\": {{other_course_id}},\n  \"academic_level\": {{other_academic_level_id}},\n  \"interests\": [{{other_interest_id}}]\n}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/users/onboarding/"}
+        },
+        {
+          "name": "Onboarding without authentication — 401",
+          "request": {"method": "POST", "auth": {"type": "noauth"}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"education_background\": {{background_id}},\n  \"course\": {{course_id}},\n  \"academic_level\": {{academic_level_id}},\n  \"interests\": [{{interest_id}}]\n}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/users/onboarding/"}
+        },
+        {
+          "name": "Onboarding completion spoof — 400",
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"education_background\": {{background_id}},\n  \"course\": {{course_id}},\n  \"academic_level\": {{academic_level_id}},\n  \"interests\": [{{interest_id}}],\n  \"onboarding_completed\": false\n}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/users/onboarding/"}
+        }
+      ]
+    },
+    {
+      "name": "Resources",
+      "item": [
+        {"name": "List resources — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/"}},
+        {"name": "Resource detail — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/{{resource_slug}}/"}},
+        {
+          "name": "Create resource — 201",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status is 201', function () { pm.response.to.have.status(201); });", "if (pm.response.json().id) pm.environment.set('resource_id', pm.response.json().id);", "if (pm.response.json().slug) pm.environment.set('resource_slug', pm.response.json().slug);"]}}],
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"title\": \"Postman resource\",\n  \"description\": \"Created from the StudyMate collection\",\n  \"subject\": \"{{subject_name}}\",\n  \"topic\": \"{{topic_name}}\",\n  \"resource_type\": \"notes\",\n  \"academic_level\": {{academic_level_id}},\n  \"difficulty\": \"beginner\"\n}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/resources/"}
+        },
+        {
+          "name": "Create resource invalid data — 400",
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"title\": \"Invalid resource\",\n  \"subject\": \"{{subject_name}}\",\n  \"resource_type\": \"invalid\"\n}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/resources/"}
+        },
+        {"name": "Create resource without authentication — 401", "request": {"method": "POST", "auth": {"type": "noauth"}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Unauthenticated\",\"subject\":\"Physics\",\"resource_type\":\"notes\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/resources/"}},
+        {"name": "Update owned resource — 200", "request": {"method": "PATCH", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Updated by Postman\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/resources/{{resource_id}}/"}},
+        {"name": "Update resource as non-owner — 403", "request": {"method": "PATCH", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{other_access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Should be rejected\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/resources/{{resource_id}}/"}},
+        {"name": "Delete owned resource — 204", "request": {"method": "DELETE", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/resources/{{resource_id}}/"}},
+        {"name": "Delete resource as non-owner — 403", "request": {"method": "DELETE", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{other_access_token}}", "type": "string"}]}, "url": "{{base_url}}/resources/{{resource_id}}/"}},
+        {"name": "Missing resource — 404", "request": {"method": "GET", "url": "{{base_url}}/resources/does-not-exist/"}},
+        {"name": "Track resource view — 201", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"view_count\":999}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/resources/{{resource_id}}/view/"}},
+        {"name": "Track resource download — 201", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"download_count\":999}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/resources/{{resource_id}}/download/"}}
+      ]
+    },
+    {
+      "name": "Saved Resources",
+      "item": [
+        {"name": "List saved resources — 200", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/saved-resources/"}},
+        {"name": "Save resource — 201", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/resources/{{resource_id}}/save/"}},
+        {"name": "Save same resource again — 200", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/resources/{{resource_id}}/save/"}},
+        {"name": "Unsave resource — 200", "request": {"method": "DELETE", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/resources/{{resource_id}}/save/"}},
+        {"name": "Unsave when not saved — 200", "request": {"method": "DELETE", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/resources/{{resource_id}}/save/"}},
+        {"name": "Save without authentication — 401", "request": {"method": "POST", "auth": {"type": "noauth"}, "url": "{{base_url}}/resources/{{resource_id}}/save/"}},
+        {"name": "Save missing resource — 404", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/resources/999999/save/"}}
+      ]
+    },
+    {
+      "name": "Videos",
+      "item": [
+        {"name": "List videos — 200", "request": {"method": "GET", "url": "{{base_url}}/videos/"}},
+        {"name": "Video detail — 200", "request": {"method": "GET", "url": "{{base_url}}/videos/{{video_slug}}/"}},
+        {"name": "Create watch URL video — 201", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Watch video\",\"subject\":\"{{subject_name}}\",\"youtube_url\":\"https://www.youtube.com/watch?v=dQw4w9WgXcQ\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/videos/"}},
+        {"name": "Create short URL video — 201", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Short video\",\"subject\":\"{{subject_name}}\",\"youtube_url\":\"https://youtu.be/3JZ_D3ELwOQ\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/videos/"}},
+        {"name": "Create embed URL video — 201", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Embed video\",\"subject\":\"{{subject_name}}\",\"youtube_url\":\"https://www.youtube.com/embed/9bZkp7q19f0\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/videos/"}},
+        {"name": "Reject external or iframe URL — 400", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Invalid video\",\"subject\":\"{{subject_name}}\",\"youtube_url\":\"<iframe src=\\\"https://www.youtube.com/embed/dQw4w9WgXcQ\\\"></iframe>\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/videos/"}},
+        {"name": "Missing video data — 400", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Missing URL\",\"subject\":\"{{subject_name}}\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/videos/"}},
+        {"name": "Create video without authentication — 401", "request": {"method": "POST", "auth": {"type": "noauth"}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Unauthenticated\",\"subject\":\"Physics\",\"youtube_url\":\"https://youtu.be/dQw4w9WgXcQ\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/videos/"}},
+        {"name": "Missing video — 404", "request": {"method": "GET", "url": "{{base_url}}/videos/does-not-exist/"}},
+        {"name": "Unsupported video delete — 405", "request": {"method": "DELETE", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/videos/{{video_slug}}/"}}
+      ]
+    },
+    {
+      "name": "Questions",
+      "item": [
+        {"name": "List questions — 200", "request": {"method": "GET", "url": "{{base_url}}/questions/"}},
+        {"name": "Question detail — 200", "request": {"method": "GET", "url": "{{base_url}}/questions/{{question_slug}}/"}},
+        {
+          "name": "Create question — 201",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status is 201', function () { pm.response.to.have.status(201); });", "if (pm.response.json().id) pm.environment.set('question_id', pm.response.json().id);", "if (pm.response.json().slug) pm.environment.set('question_slug', pm.response.json().slug);"]}}],
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Postman question\",\"body\":\"What is the answer?\",\"subject\":\"{{subject_name}}\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/questions/"}
+        },
+        {"name": "Invalid question — 400", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Missing body\",\"subject\":\"{{subject_name}}\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/questions/"}},
+        {"name": "Create question without authentication — 401", "request": {"method": "POST", "auth": {"type": "noauth"}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Anonymous\",\"body\":\"Body\",\"subject\":\"Physics\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/questions/"}},
+        {"name": "Update owned question — 200", "request": {"method": "PATCH", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Updated question\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/questions/{{question_slug}}/"}},
+        {"name": "Update question as non-owner — 403", "request": {"method": "PATCH", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{other_access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Rejected update\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/questions/{{question_slug}}/"}},
+        {"name": "Delete owned question — 204", "request": {"method": "DELETE", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/questions/{{question_slug}}/"}},
+        {"name": "Missing question — 404", "request": {"method": "GET", "url": "{{base_url}}/questions/does-not-exist/"}},
+        {"name": "Upvote question — 201/200 duplicate-safe", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/questions/{{question_id}}/upvote/"}},
+        {"name": "Unvote question — 200", "request": {"method": "DELETE", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/questions/{{question_id}}/upvote/"}}
+      ]
+    },
+    {
+      "name": "Answers",
+      "item": [
+        {
+          "name": "Create answer — 201",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status is 201', function () { pm.response.to.have.status(201); });", "if (pm.response.json().id) pm.environment.set('answer_id', pm.response.json().id);"]}}],
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"body\":\"Answer created from Postman\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/questions/{{question_id}}/answers/"}
+        },
+        {"name": "Answer detail — 200", "request": {"method": "GET", "url": "{{base_url}}/questions/{{question_id}}/answers/{{answer_id}}/"}},
+        {"name": "Invalid answer — 400", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"body\":\"\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/questions/{{question_id}}/answers/"}},
+        {"name": "Create answer without authentication — 401", "request": {"method": "POST", "auth": {"type": "noauth"}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"body\":\"Anonymous answer\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/questions/{{question_id}}/answers/"}},
+        {"name": "Update answer as non-owner — 403", "request": {"method": "PATCH", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{other_access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"body\":\"Rejected answer update\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/questions/{{question_id}}/answers/{{answer_id}}/"}},
+        {"name": "Upvote answer — 201/200 duplicate-safe", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/questions/{{question_id}}/answers/{{answer_id}}/upvote/"}},
+        {"name": "Unvote answer — 200", "request": {"method": "DELETE", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/questions/{{question_id}}/answers/{{answer_id}}/upvote/"}},
+        {"name": "Missing answer — 404", "request": {"method": "GET", "url": "{{base_url}}/questions/{{question_id}}/answers/999999/"}},
+        {"name": "Answer for missing question — 404", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"body\":\"No such question\"}", "options": {"raw": {"language": "json"}}}, "url": "{{base_url}}/questions/999999/answers/"}}
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {"name": "List own notifications — 200", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/notifications/"}},
+        {"name": "Own notification detail — 200", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/notifications/{{notification_id}}/"}},
+        {"name": "Mark one notification read — 200", "request": {"method": "PATCH", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/notifications/{{notification_id}}/read/"}},
+        {"name": "Mark all own notifications read — 200", "request": {"method": "PATCH", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/notifications/read-all/"}},
+        {"name": "Other user's notification — 404", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]}, "url": "{{base_url}}/notifications/{{other_notification_id}}/"}},
+        {"name": "Notifications without authentication — 401", "request": {"method": "GET", "auth": {"type": "noauth"}, "url": "{{base_url}}/notifications/"}}
+      ]
+    },
+    {
+      "name": "Search/Filtering",
+      "item": [
+        {"name": "Keyword search — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?search={{search_term}}"}},
+        {"name": "Subject and topic filters — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?subject={{subject_name}}&topic={{topic_name}}"}},
+        {"name": "Resource type and difficulty filters — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?resource_type=notes&difficulty=beginner"}},
+        {"name": "Academic level and tags filters — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?academic_level={{academic_level_id}}&tags={{tag_name}}"}},
+        {"name": "Combined filters — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?search={{search_term}}&subject={{subject_name}}&topic={{topic_name}}&resource_type=notes&difficulty=beginner&academic_level={{academic_level_id}}&tags={{tag_name}}"}},
+        {"name": "Latest ordering — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?ordering=latest"}},
+        {"name": "Popular ordering — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?ordering=popular"}},
+        {"name": "Top rated ordering — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?ordering=top_rated"}},
+        {"name": "Most downloaded ordering — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?ordering=most_downloaded"}},
+        {"name": "Pagination page 1 — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?page=1&page_size={{page_size}}"}},
+        {"name": "Pagination page 2 — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?page=2&page_size={{page_size}}"}},
+        {"name": "Invalid filter returns empty page — 200", "request": {"method": "GET", "url": "{{base_url}}/resources/?resource_type=not-a-resource-type"}},
+        {"name": "Invalid page — 404", "request": {"method": "GET", "url": "{{base_url}}/resources/?page=not-a-number"}}
+      ]
+    }
+  ]
+}

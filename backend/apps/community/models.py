@@ -1,0 +1,54 @@
+from django.conf import settings
+from django.db import models
+
+from apps.core.model_utils import unique_slug
+from apps.resources.models import PublicationStatus, Tag
+
+
+class Question(models.Model):
+    title = models.CharField(max_length=300)
+    slug = models.SlugField(max_length=300, unique=True, blank=True)
+    body = models.TextField(max_length=10000)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="questions")
+    subject = models.CharField(max_length=120, db_index=True)
+    topic = models.CharField(max_length=120, blank=True, db_index=True)
+    academic_level = models.ForeignKey(
+        "education.AcademicLevel", on_delete=models.SET_NULL, null=True, blank=True, related_name="questions"
+    )
+    tags = models.ManyToManyField(Tag, blank=True, related_name="questions")
+    status = models.CharField(max_length=12, choices=PublicationStatus.choices, default=PublicationStatus.PUBLISHED, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["author", "created_at"]),
+            models.Index(fields=["subject", "topic"]),
+            models.Index(fields=["academic_level", "status", "created_at"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = unique_slug(self, self.title)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title
+
+
+class Answer(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name="answers")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="answers")
+    body = models.TextField(max_length=10000)
+    is_helpful = models.BooleanField(default=False)
+    status = models.CharField(max_length=12, choices=PublicationStatus.choices, default=PublicationStatus.PUBLISHED, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("created_at",)
+        indexes = [models.Index(fields=["question", "created_at"]), models.Index(fields=["author", "created_at"])]
+
+    def __str__(self):
+        return f"Answer by {self.author} on {self.question}"
