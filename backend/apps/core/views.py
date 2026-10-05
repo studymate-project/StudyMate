@@ -73,6 +73,14 @@ HEALTH_RESPONSE = inline_serializer(
 )
 
 
+def enforce_cookie_csrf(request):
+    """Enforce CSRF for browser API mutations while honoring DRF test clients."""
+
+    if getattr(request._request, "_dont_enforce_csrf_checks", False):
+        return
+    SessionAuthentication().enforce_csrf(request)
+
+
 @extend_schema_view(
     post=extend_schema(
         summary="Create an account",
@@ -87,6 +95,10 @@ class SignupView(CreateAPIView):
     serializer_class = RegistrationSerializer
     permission_classes = (AllowAny,)
     throttle_scope = "auth_signup"
+
+    def post(self, request, *args, **kwargs):
+        enforce_cookie_csrf(request)
+        return super().post(request, *args, **kwargs)
 
 
 class CsrfTokenView(APIView):
@@ -126,6 +138,7 @@ class LoginView(APIView):
         responses={200: AUTH_RESPONSE, 400: BAD_REQUEST, 401: UNAUTHENTICATED},
     )
     def post(self, request: Request) -> Response:
+        enforce_cookie_csrf(request)
         serializer = LoginSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
@@ -166,14 +179,6 @@ def safe_user_data(user):
     if profile is not None:
         user_data["profile"] = StudentProfileSerializer(profile).data
     return user_data
-
-
-def enforce_cookie_csrf(request):
-    """Enforce CSRF for real cookie requests while honoring DRF test clients."""
-
-    if getattr(request._request, "_dont_enforce_csrf_checks", False):
-        return
-    SessionAuthentication().enforce_csrf(request)
 
 
 class MeView(APIView):

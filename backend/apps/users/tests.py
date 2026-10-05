@@ -86,6 +86,23 @@ class ProfileAvatarAPITests(TestCase):
         self.assertEqual(self.profile.avatar_url, "https://images.example.test/profile.png")
         self.assertEqual(self.profile.avatar_reference, "")
 
+    def test_avatar_url_rejects_credentials_and_html_like_values(self):
+        self.client.force_authenticate(user=self.owner)
+
+        credential_url = self.client.patch(
+            f"/api/users/{self.owner.username}/",
+            {"avatar_url": "https://user:password@images.example.test/profile.png"},
+            format="json",
+        )
+        html_value = self.client.patch(
+            f"/api/users/{self.owner.username}/",
+            {"avatar_url": "https://images.example.test/<img src=x>"},
+            format="json",
+        )
+
+        self.assertEqual(credential_url.status_code, 400)
+        self.assertEqual(html_value.status_code, 400)
+
     @override_settings(**cloudinary_settings)
     @patch("cloudinary.uploader.destroy")
     @patch("cloudinary.uploader.upload")
@@ -115,6 +132,35 @@ class ProfileAvatarAPITests(TestCase):
             invalidate=True,
             resource_type="image",
         )
+
+    @override_settings(**cloudinary_settings)
+    @patch("cloudinary.uploader.destroy")
+    def test_clearing_shared_avatar_does_not_delete_still_referenced_media(self, destroy_mock):
+        other_user = type(self.owner).objects.create_user(
+            username="avatar-shared-other",
+            password="not-used-in-test",
+        )
+        other_profile = StudentProfile.objects.create(user=other_user)
+        shared_reference = "cloudinary://studymate/avatars/user-1/shared.png"
+        self.profile.avatar_url = "https://res.cloudinary.com/test-cloud/image/upload/shared.png"
+        self.profile.avatar_reference = shared_reference
+        self.profile.save(update_fields=("avatar_url", "avatar_reference"))
+        other_profile.avatar_url = self.profile.avatar_url
+        other_profile.avatar_reference = shared_reference
+        other_profile.save(update_fields=("avatar_url", "avatar_reference"))
+        self.client.force_authenticate(user=self.owner)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                f"/api/users/{self.owner.username}/",
+                {"avatar_url": ""},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.avatar_reference, "")
+        destroy_mock.assert_not_called()
 
     @override_settings(**cloudinary_settings)
     @patch("cloudinary.uploader.upload")

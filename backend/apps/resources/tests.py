@@ -9,8 +9,11 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from rest_framework import serializers
 from rest_framework.test import APIClient
 
+from backend.settings import _build_storage_config
+
 from .models import PublicationStatus, Resource
 from .serializers import ResourceSerializer
+from .services.cloudinary import _storage_name
 
 
 class CloudinaryConfigurationTests(SimpleTestCase):
@@ -29,10 +32,38 @@ class CloudinaryConfigurationTests(SimpleTestCase):
         else:
             self.assertNotIn("cloudinary_media", settings.STORAGES)
 
-    def test_existing_resource_file_storage_is_not_changed(self):
+    def test_local_storage_config_uses_filesystem_storage(self):
+        storage_config = _build_storage_config(debug=True, cloudinary_configured=False)
+
+        self.assertEqual(
+            storage_config["default"]["BACKEND"],
+            "django.core.files.storage.FileSystemStorage",
+        )
+
+    def test_production_storage_config_uses_cloudinary_raw_storage(self):
+        storage_config = _build_storage_config(debug=False, cloudinary_configured=True)
+
+        self.assertEqual(
+            storage_config["default"]["BACKEND"],
+            "cloudinary_storage.storage.RawMediaCloudinaryStorage",
+        )
+
+    @override_settings(
+        DEBUG=False,
+        CLOUDINARY_CONFIGURED=True,
+        STORAGES={
+            "default": {
+                "BACKEND": "cloudinary_storage.storage.RawMediaCloudinaryStorage",
+            },
+            "staticfiles": {
+                "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+            },
+        }
+    )
+    def test_production_resource_file_does_not_use_local_storage(self):
         file_field = Resource._meta.get_field("file")
 
-        self.assertIsInstance(file_field.storage, FileSystemStorage)
+        self.assertNotIsInstance(file_field.storage, FileSystemStorage)
         self.assertEqual(file_field.upload_to, "resources/")
 
 
@@ -76,6 +107,17 @@ class ResourceFileValidationTests(TestCase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("content does not match", str(serializer.errors["file"][0]))
+
+    def test_rejects_mismatched_declared_mime_type_with_valid_signature(self):
+        serializer = ResourceSerializer(
+            data=self.serializer_data(
+                Resource.ResourceType.PDF,
+                SimpleUploadedFile("notes.pdf", b"%PDF-1.7\nvalid", content_type="text/html"),
+            )
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("content type is not allowed", str(serializer.errors["file"][0]))
 
     @override_settings(RESOURCE_MAX_FILE_SIZE_BYTES=4)
     def test_rejects_oversized_file(self):
@@ -232,6 +274,18 @@ class CloudinaryUploadServiceTests(TestCase):
         self.assertIn("https://api.cloudinary.com/v1_1/test-cloud/raw/download?", representation["file"])
         self.assertIn("public_id=studymate%2Fresources%2Fpdf%2Fuploader-1%2Fasset.pdf", representation["file"])
         self.assertNotIn("test-secret", representation["file"])
+
+    def test_cloudinary_storage_name_cannot_escape_configured_folder(self):
+        storage_name = _storage_name(
+            resource_type="../pdf",
+            uploader_id=7,
+            extension=".pdf",
+        )
+
+        self.assertTrue(storage_name.startswith("studymate/resources/"))
+        self.assertIn("/uploader-7/", storage_name)
+        self.assertNotIn("..", storage_name)
+        self.assertNotIn("\\", storage_name)
 
     @override_settings(**cloudinary_settings)
     @patch("cloudinary.uploader.upload")

@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import environ
 from django.core.exceptions import ImproperlyConfigured
@@ -12,10 +13,30 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DEBUG=(bool, False),
 )
-environ.Env.read_env(BASE_DIR / ".env")
+environ.Env.read_env(BASE_DIR / ".env", parse_comments=True)
 
 SECRET_KEY = env("SECRET_KEY")
-DEBUG = env("DEBUG")
+DEBUG = env.bool("DEBUG", default=False)
+
+_INSECURE_SECRET_VALUES = frozenset(
+    {
+        "replace-with-a-unique-secret-key",
+        "replace-with-a-separate-jwt-signing-key",
+        "change-me",
+    }
+)
+
+if not DEBUG and (len(SECRET_KEY) < 50 or SECRET_KEY in _INSECURE_SECRET_VALUES):
+    raise ImproperlyConfigured(
+        "Production SECRET_KEY must be a unique, high-entropy environment value."
+    )
+
+# Refresh-token revocation is enabled by default only outside local development.
+# The blacklist app is part of SimpleJWT; no additional authentication system is
+# introduced. It can be explicitly disabled for a controlled deployment if needed.
+JWT_TOKEN_BLACKLIST_ENABLED = env.bool(
+    "JWT_TOKEN_BLACKLIST_ENABLED", default=not DEBUG
+)
 
 
 def _env_list(name: str) -> list[str]:
@@ -50,8 +71,12 @@ INSTALLED_APPS = [
     'apps.notifications',
 ]
 
+if JWT_TOKEN_BLACKLIST_ENABLED:
+    INSTALLED_APPS.append('rest_framework_simplejwt.token_blacklist')
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -85,6 +110,25 @@ DATABASES = {
     'default': env.db('DATABASE_URL'),
 }
 
+if not DEBUG and DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
+    raise ImproperlyConfigured('Production DATABASE_URL must use PostgreSQL.')
+
+# Render PostgreSQL supports TLS. Local development keeps the connection
+# behavior supplied by DATABASE_URL unless DB_SSLMODE is explicitly set.
+DB_SSLMODE = env('DB_SSLMODE', default='require' if not DEBUG else '').strip().lower()
+if DB_SSLMODE not in {'', 'disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'}:
+    raise ImproperlyConfigured(
+        'DB_SSLMODE must be a valid PostgreSQL sslmode value.'
+    )
+if not DEBUG and DB_SSLMODE not in {'require', 'verify-ca', 'verify-full'}:
+    raise ImproperlyConfigured(
+        'Production PostgreSQL connections must use DB_SSLMODE=require, verify-ca, or verify-full.'
+    )
+if DB_SSLMODE:
+    # Assign explicitly so a conflicting sslmode query parameter in
+    # DATABASE_URL cannot weaken the production requirement.
+    DATABASES['default'].setdefault('OPTIONS', {})['sslmode'] = DB_SSLMODE
+
 # A persistent connection is owned by each request-serving thread. The
 # threaded development server can therefore create one PostgreSQL session
 # per visited request when CONN_MAX_AGE is non-zero, eventually exhausting a
@@ -97,6 +141,36 @@ if DB_CONN_MAX_AGE < 0:
     raise ImproperlyConfigured('DB_CONN_MAX_AGE must not be negative.')
 DATABASES['default']['CONN_MAX_AGE'] = DB_CONN_MAX_AGE
 DATABASES['default']['CONN_HEALTH_CHECKS'] = env.bool('DB_CONN_HEALTH_CHECKS', default=True)
+
+
+def _build_cache_config(redis_url: str, debug: bool) -> dict:
+    """Use shared Redis when configured and fail closed for production."""
+
+    if redis_url:
+        if not debug and urlsplit(redis_url).scheme.casefold() != 'rediss':
+            raise ImproperlyConfigured(
+                'Production REDIS_URL must use the rediss:// TLS scheme.'
+            )
+        return {
+            'default': {
+                'BACKEND': 'django_redis.cache.RedisCache',
+                'LOCATION': redis_url,
+            },
+        }
+    if not debug:
+        raise ImproperlyConfigured(
+            'Production cache configuration requires REDIS_URL.'
+        )
+    return {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'studymate-local-cache',
+        },
+    }
+
+
+REDIS_URL = env('REDIS_URL', default='').strip()
+CACHES = _build_cache_config(REDIS_URL, DEBUG)
 
 
 # Password validation
@@ -138,15 +212,24 @@ PROFILE_AVATAR_MAX_FILE_SIZE_BYTES = env.int('PROFILE_AVATAR_MAX_FILE_SIZE_BYTES
 if PROFILE_AVATAR_MAX_FILE_SIZE_BYTES <= 0:
     raise ImproperlyConfigured('PROFILE_AVATAR_MAX_FILE_SIZE_BYTES must be greater than zero.')
 
-# Cloudinary is optional for local development. Credentials are only used to
-# initialize the SDK and expose a named storage alias; existing local and
-# legacy file behavior remains on Django's default filesystem storage.
+# Cloudinary is optional for local development. Credentials are used to
+# initialize the SDK and expose named storage aliases.
 CLOUDINARY_CLOUD_NAME = env('CLOUDINARY_CLOUD_NAME', default='')
 CLOUDINARY_API_KEY = env('CLOUDINARY_API_KEY', default='')
 CLOUDINARY_API_SECRET = env('CLOUDINARY_API_SECRET', default='')
 CLOUDINARY_CONFIGURED = all(
     (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)
 )
+if not DEBUG and any(
+    (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)
+) and not CLOUDINARY_CONFIGURED:
+    raise ImproperlyConfigured(
+        'Production Cloudinary configuration requires cloud name, API key, and API secret together.'
+    )
+if not DEBUG and not CLOUDINARY_CONFIGURED:
+    raise ImproperlyConfigured(
+        'Production Cloudinary configuration is required for durable media storage.'
+    )
 CLOUDINARY_STORAGE = {
     'CLOUD_NAME': CLOUDINARY_CLOUD_NAME,
     'API_KEY': CLOUDINARY_API_KEY,
@@ -157,16 +240,23 @@ CLOUDINARY_STORAGE = {
 CLOUDINARY_RESOURCE_FOLDER = env('CLOUDINARY_RESOURCE_FOLDER', default='studymate/resources').strip('/')
 CLOUDINARY_AVATAR_FOLDER = env('CLOUDINARY_AVATAR_FOLDER', default='studymate/avatars').strip('/')
 
-# Keep the current Django storage behavior explicit and provide Cloudinary as
-# an opt-in alias for a future resource-file storage migration.
-STORAGES = {
-    'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage',
-    },
-    'staticfiles': {
-        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
-    },
-}
+def _build_storage_config(debug: bool, cloudinary_configured: bool) -> dict:
+    default_backend = (
+        'django.core.files.storage.FileSystemStorage'
+        if debug or not cloudinary_configured
+        else 'cloudinary_storage.storage.RawMediaCloudinaryStorage'
+    )
+    return {
+        'default': {
+            'BACKEND': default_backend,
+        },
+        'staticfiles': {
+            'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+        },
+    }
+
+
+STORAGES = _build_storage_config(DEBUG, CLOUDINARY_CONFIGURED)
 
 if CLOUDINARY_CONFIGURED:
     import cloudinary
@@ -186,12 +276,15 @@ if CLOUDINARY_CONFIGURED:
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS is deliberately limited to configured frontend origins. Credentials are
-# enabled now so the future HTTP-only-cookie authentication design is supported.
-CORS_ALLOWED_ORIGINS = _env_list('CORS_ALLOWED_ORIGINS')
+# CORS is deliberately limited to the configured frontend origin. Credentials
+# are enabled for the HTTP-only-cookie authentication design.
+FRONTEND_URL = env('FRONTEND_URL', default='').strip().rstrip('/')
+configured_cors_origins = _env_list('CORS_ALLOWED_ORIGINS')
+CORS_ALLOWED_ORIGINS = configured_cors_origins or ([FRONTEND_URL] if FRONTEND_URL else [])
 CORS_ALLOW_CREDENTIALS = True
 CORS_URLS_REGEX = r'^/api/.*$'
-CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS')
+configured_csrf_origins = _env_list('CSRF_TRUSTED_ORIGINS')
+CSRF_TRUSTED_ORIGINS = configured_csrf_origins or ([FRONTEND_URL] if FRONTEND_URL else [])
 
 # JWT/cookie authentication settings. Secrets remain environment-controlled;
 # the Django SECRET_KEY is only the safe local fallback when a separate JWT
@@ -205,16 +298,35 @@ JWT_COOKIE_HTTPONLY = True
 JWT_ACCESS_COOKIE_HTTPONLY = True
 JWT_REFRESH_COOKIE_HTTPONLY = True
 JWT_COOKIE_SECURE = env.bool('JWT_COOKIE_SECURE', default=not DEBUG)
-JWT_COOKIE_SAMESITE = env('JWT_COOKIE_SAMESITE', default='Lax')
+JWT_COOKIE_SAMESITE = env(
+    'JWT_COOKIE_SAMESITE', default='Lax' if DEBUG else 'None'
+).strip().capitalize()
 JWT_ACCESS_COOKIE_PATH = env('JWT_ACCESS_COOKIE_PATH', default='/')
 JWT_REFRESH_COOKIE_PATH = env('JWT_REFRESH_COOKIE_PATH', default='/api/auth/')
 JWT_COOKIE_DOMAIN = env('JWT_COOKIE_DOMAIN', default=None)
 
+if JWT_COOKIE_SAMESITE not in {'Lax', 'Strict', 'None'}:
+    raise ImproperlyConfigured('JWT_COOKIE_SAMESITE must be Lax, Strict, or None.')
+
+if not DEBUG and (
+    not JWT_SIGNING_KEY
+    or len(JWT_SIGNING_KEY) < 50
+    or JWT_SIGNING_KEY in _INSECURE_SECRET_VALUES
+    or JWT_SIGNING_KEY == SECRET_KEY
+):
+    raise ImproperlyConfigured(
+        'Production JWT_SIGNING_KEY must be a separate, unique, high-entropy environment value.'
+    )
+
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=JWT_ACCESS_TOKEN_MINUTES),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=JWT_REFRESH_TOKEN_DAYS),
-    'ROTATE_REFRESH_TOKENS': env.bool('JWT_ROTATE_REFRESH_TOKENS', default=False),
-    'BLACKLIST_AFTER_ROTATION': env.bool('JWT_BLACKLIST_AFTER_ROTATION', default=False),
+    'ROTATE_REFRESH_TOKENS': env.bool(
+        'JWT_ROTATE_REFRESH_TOKENS', default=JWT_TOKEN_BLACKLIST_ENABLED
+    ),
+    'BLACKLIST_AFTER_ROTATION': env.bool(
+        'JWT_BLACKLIST_AFTER_ROTATION', default=JWT_TOKEN_BLACKLIST_ENABLED
+    ),
     'UPDATE_LAST_LOGIN': env.bool('JWT_UPDATE_LAST_LOGIN', default=False),
     'ALGORITHM': env('JWT_ALGORITHM', default='HS256'),
     'SIGNING_KEY': JWT_SIGNING_KEY,
@@ -262,6 +374,123 @@ else:
 
 if SECURE_HSTS_SECONDS < 0:
     raise ImproperlyConfigured('SECURE_HSTS_SECONDS must not be negative.')
+
+LOG_LEVEL = env('LOG_LEVEL', default='INFO').strip().upper()
+if LOG_LEVEL not in {'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'}:
+    raise ImproperlyConfigured('LOG_LEVEL must be a standard Python logging level.')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': LOG_LEVEL,
+    },
+}
+
+
+def _validate_production_origins() -> None:
+    if DEBUG:
+        return
+
+    if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS:
+        raise ImproperlyConfigured(
+            'Production ALLOWED_HOSTS must contain explicit hostnames and no wildcard.'
+        )
+    if any(not host or '://' in host or '/' in host for host in ALLOWED_HOSTS):
+        raise ImproperlyConfigured(
+            'Production ALLOWED_HOSTS values must be hostnames without URL schemes or paths.'
+        )
+    if not CORS_ALLOWED_ORIGINS:
+        raise ImproperlyConfigured(
+            'Production CORS_ALLOWED_ORIGINS must explicitly allow the frontend origin.'
+        )
+    if not FRONTEND_URL:
+        raise ImproperlyConfigured(
+            'Production FRONTEND_URL must be the exact HTTPS Vercel frontend origin.'
+        )
+    if not CSRF_TRUSTED_ORIGINS:
+        raise ImproperlyConfigured(
+            'Production CSRF_TRUSTED_ORIGINS must explicitly trust the frontend origin.'
+        )
+
+    frontend = urlsplit(FRONTEND_URL)
+    if (
+        frontend.scheme != 'https'
+        or not frontend.hostname
+        or frontend.path not in {'', '/'}
+        or frontend.query
+        or frontend.fragment
+    ):
+        raise ImproperlyConfigured(
+            'Production FRONTEND_URL must be an explicit HTTPS origin without a path.'
+        )
+
+    if {origin.rstrip('/') for origin in CORS_ALLOWED_ORIGINS} != {FRONTEND_URL}:
+        raise ImproperlyConfigured(
+            'Production CORS_ALLOWED_ORIGINS must contain only FRONTEND_URL.'
+        )
+
+    trusted_origins = {trusted.rstrip('/') for trusted in CSRF_TRUSTED_ORIGINS}
+    if FRONTEND_URL not in trusted_origins:
+        raise ImproperlyConfigured(
+            'Production CSRF_TRUSTED_ORIGINS must include FRONTEND_URL.'
+        )
+    for origin in CORS_ALLOWED_ORIGINS:
+        parsed = urlsplit(origin)
+        if (
+            parsed.scheme != 'https'
+            or not parsed.hostname
+            or parsed.path not in {'', '/'}
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ImproperlyConfigured(
+                'Production CORS_ALLOWED_ORIGINS values must be explicit HTTPS origins.'
+            )
+        if origin.rstrip('/') not in trusted_origins:
+            raise ImproperlyConfigured(
+                'Every production CORS origin must also be in CSRF_TRUSTED_ORIGINS.'
+            )
+
+    for origin in CSRF_TRUSTED_ORIGINS:
+        normalized_origin = origin.replace('https://*.', 'https://placeholder.')
+        parsed = urlsplit(normalized_origin)
+        if (
+            parsed.scheme != 'https'
+            or not parsed.hostname
+            or parsed.path not in {'', '/'}
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ImproperlyConfigured(
+                'Production CSRF_TRUSTED_ORIGINS values must use HTTPS origins.'
+            )
+
+    if not JWT_COOKIE_SECURE or not CSRF_COOKIE_SECURE or not SESSION_COOKIE_SECURE:
+        raise ImproperlyConfigured(
+            'Production authentication, CSRF, and session cookies must be Secure.'
+        )
+    if JWT_COOKIE_SAMESITE != 'None' or CSRF_COOKIE_SAMESITE != 'None':
+        raise ImproperlyConfigured(
+            'Production cross-site cookie authentication requires SameSite=None for JWT and CSRF cookies.'
+        )
+    if not SECURE_SSL_REDIRECT or SECURE_HSTS_SECONDS <= 0:
+        raise ImproperlyConfigured(
+            'Production must redirect HTTP to HTTPS and enable HSTS.'
+        )
+    if not SECURE_CONTENT_TYPE_NOSNIFF or X_FRAME_OPTIONS not in {'DENY', 'SAMEORIGIN'}:
+        raise ImproperlyConfigured(
+            'Production security headers must prevent content-type sniffing and unsafe framing.'
+        )
+
+
+_validate_production_origins()
 
 # New API endpoints are private by default. The public health endpoint opts out
 # explicitly while authentication is introduced in a later milestone.

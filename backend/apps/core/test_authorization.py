@@ -28,3 +28,12 @@ class AdminAuthorizationTests(TestCase):
         admin_response = self.client.get("/admin/")
 
         self.assertEqual(admin_response.status_code, 200)
+
+    def test_search_namespace_does_not_duplicate_auth_routes(self):
+        response = self.client.post(
+            "/api/search/login/",
+            {"email": "authorization-student@example.com", "password": "not-used-in-test"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)

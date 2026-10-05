@@ -1,6 +1,6 @@
 from django.db.models import Q
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from .models import AcademicLevel, Course, EducationBackground, Interest, StudentInterest
@@ -192,6 +192,10 @@ class InterestViewSet(ReadOnlyModelViewSet):
     ),
 )
 class StudentInterestViewSet(ReadOnlyModelViewSet):
-    queryset = StudentInterest.objects.select_related("student_profile__user", "interest").order_by("pk")
     serializer_class = StudentInterestSerializer
-    permission_classes = (AllowAny,)
+    permission_classes = (IsAuthenticated,)
+
+    def get_queryset(self):
+        return StudentInterest.objects.select_related(
+            "student_profile__user", "interest"
+        ).filter(student_profile__user=self.request.user).order_by("pk")

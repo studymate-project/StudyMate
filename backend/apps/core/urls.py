@@ -15,5 +15,4 @@ urlpatterns = [
     path('videos/', include('apps.resources.video_urls')),
     path('questions/', include('apps.community.urls')),
     path('notifications/', include('apps.notifications.urls')),
-    path('search/', include('apps.core.reserved_urls')),
 ]

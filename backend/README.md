@@ -48,19 +48,91 @@ Set a unique `SECRET_KEY` in `.env`; the comment in `.env.example` includes a
 command that generates one. `.env` is ignored and must never be committed.
 For a production deployment, set `DEBUG=False`, use HTTPS origins, and retain
 the `SECURE_SSL_REDIRECT` and `SECURE_HSTS_SECONDS` values from the example.
+Set `ALLOWED_HOSTS` to the Render hostname, and set both
+`CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` to the exact HTTPS Vercel
+`FRONTEND_URL` to that same exact HTTPS Vercel origin. `CORS_ALLOWED_ORIGINS`
+must contain only `FRONTEND_URL`; `CSRF_TRUSTED_ORIGINS` must contain it and
+may additionally contain an explicitly configured HTTPS backend origin when
+needed by the existing cookie-auth architecture. Because the frontend and API are cross-site, production cookie auth
+also requires `JWT_COOKIE_SAMESITE=None` and `JWT_COOKIE_SECURE=True`; CSRF
+protection remains required for unsafe requests.
+
+Production settings reject placeholder/semi-shared secrets, non-PostgreSQL
+databases, wildcard hosts, insecure origins, insecure cookies, and partial
+Cloudinary credentials during startup. Durable Cloudinary media storage is
+required when `DEBUG=False`. Refresh-token rotation and blacklisting are enabled
+by default when `DEBUG=False`; run `python manage.py migrate` so the SimpleJWT
+blacklist tables exist.
 
 Cloudinary is optional in local development. Set `CLOUDINARY_CLOUD_NAME`,
 `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` together to initialize the
 server-side Cloudinary SDK and enable the `cloudinary_media` storage alias.
-This foundation deliberately leaves the existing `Resource.file` filesystem
-storage unchanged; migrating that field and existing records is a later step.
+This foundation deliberately leaves the existing `Resource.file` field and
+database references unchanged; new production uploads use the configured
+Cloudinary storage alias while existing records are not migrated.
 Resource uploads are server-validated against their resource type, file
 signature, allowed content type, and `RESOURCE_MAX_FILE_SIZE_BYTES` (20 MiB by
 default). Existing metadata-only Resource creation remains supported.
 When configured, new validated files are uploaded by Django into the
 `CLOUDINARY_RESOURCE_FOLDER` hierarchy and the existing `Resource.file` field
-stores a Cloudinary reference. Local filesystem storage remains the fallback
-when Cloudinary credentials are absent.
+stores a Cloudinary reference. Local filesystem storage is available only when
+`DEBUG=True`.
+
+## Render deployment
+
+Set the Render service root directory to `backend`.
+
+Build Command:
+
+```text
+pip install -r requirements/base.txt && python manage.py collectstatic --noinput
+```
+
+Start Command:
+
+```text
+gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --access-logfile - --error-logfile -
+```
+
+Do not use Django's development server on Render. After the first deploy, run
+the migration command from the Render Shell or a one-off job:
+
+```text
+python manage.py migrate --noinput
+```
+
+The health-check URL is `https://<render-service>.onrender.com/api/health/`.
+Configure Render's health check path to `/api/health/`.
+
+Required Render environment variables:
+
+- `SECRET_KEY`: unique high-entropy Django secret.
+- `DEBUG=False`.
+- `DATABASE_URL`: Render PostgreSQL connection string.
+- `DB_SSLMODE=require`.
+- `ALLOWED_HOSTS`: the exact Render hostname, plus any configured custom API hostname.
+- `FRONTEND_URL`: the exact HTTPS Vercel origin.
+- `CORS_ALLOWED_ORIGINS`: exactly the same HTTPS Vercel origin.
+- `CSRF_TRUSTED_ORIGINS`: the same HTTPS Vercel origin.
+- `JWT_SIGNING_KEY`: unique high-entropy key different from `SECRET_KEY`.
+- `JWT_COOKIE_SECURE=True`.
+- `JWT_COOKIE_SAMESITE=None`.
+- `JWT_TOKEN_BLACKLIST_ENABLED=True`.
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`.
+- `LOG_LEVEL=INFO`.
+
+Optional Render variables include the JWT lifetimes, Cloudinary folders,
+database connection bounds, throttling rates, and cookie domain. Render
+provides `PORT`; it must not be committed or hard-coded.
+
+Required Vercel environment variable:
+
+```text
+VITE_API_BASE_URL=https://<render-service>.onrender.com/api
+```
+
+Replace the placeholder with the deployed Render API origin and redeploy the
+Vercel frontend after changing it.
 
 ## PostgreSQL
 
@@ -77,6 +149,13 @@ SQLite fallback is provided. Once the database is reachable, run:
 ```powershell
 python manage.py migrate
 ```
+
+Render should provide its PostgreSQL `DATABASE_URL` as a secret environment
+variable and set `DB_SSLMODE=require`. Production defaults to TLS-required
+PostgreSQL connections; local development leaves SSL mode to the local URL.
+`DB_CONN_MAX_AGE=0` and health checks are the safe defaults for Render workers;
+only increase connection reuse after sizing the worker count against the
+database connection limit.
 
 ## Run the API
 

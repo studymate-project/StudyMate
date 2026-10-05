@@ -2306,6 +2306,25 @@ class APIViewTests(TestCase):
         self.assertEqual(invalid_response.data, expired_response.data)
         self.assertEqual(invalid_response.data["detail"], "Invalid or expired refresh token.")
 
+    def test_revoked_refresh_cookie_cannot_be_reused(self):
+        if "rest_framework_simplejwt.token_blacklist" not in settings.INSTALLED_APPS:
+            self.skipTest("Refresh-token blacklist is enabled only in production configuration.")
+
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {"email": "api-user@example.com", "password": "not-used-in-test"},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, 200)
+
+        refresh_token = RefreshToken(self.client.cookies[settings.JWT_REFRESH_COOKIE_NAME].value)
+        refresh_token.blacklist()
+
+        response = self.client.post("/api/auth/refresh/", {}, format="json")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["detail"], "Invalid or expired refresh token.")
+
     def test_logout_clears_cookies_and_access_is_denied_afterward(self):
         login_response = self.client.post(
             "/api/auth/login/",
