@@ -33,7 +33,7 @@ class APIErrorHandlingTests(TestCase):
         self.assertNotIn("Traceback", response.content.decode())
 
     @override_settings(DEBUG=False, ALLOWED_HOSTS=["testserver"], ROOT_URLCONF=__name__)
-    def test_unexpected_api_error_is_generic_json_and_logs_no_exception_data(self):
+    def test_unexpected_api_error_is_generic_json_and_logs_redacted_diagnostics(self):
         with self.assertLogs("apps.core.exceptions", level="ERROR") as captured:
             response = self.client.get("/api/test-unexpected-error/")
 
@@ -53,3 +53,7 @@ class APIErrorHandlingTests(TestCase):
         self.assertEqual(response.json(), {"detail": "Internal server error."})
         self.assertNotIn("Traceback", response_text)
         self.assertIn("Unhandled API exception", log_text)
+        self.assertIn("RuntimeError", log_text)
+        self.assertIn("SECRET_KEY=[redacted]", log_text)
+        self.assertIn("DATABASE_URL=[redacted]", log_text)
+        self.assertIn("password=[redacted]", log_text)

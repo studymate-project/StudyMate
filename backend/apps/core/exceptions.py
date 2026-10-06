@@ -1,6 +1,7 @@
 """Small API exception normalization built on DRF's default handler."""
 
 import logging
+import re
 from typing import Any
 
 from django.conf import settings
@@ -9,6 +10,20 @@ from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
 logger = logging.getLogger(__name__)
+
+_SENSITIVE_EXCEPTION_VALUE = re.compile(
+    r"(?i)\b(SECRET_KEY|JWT(?:_[A-Z_]+)?|DATABASE_URL|password|token)\s*=\s*[^\s,;]+"
+)
+
+
+def _safe_exception_message(exc: Exception) -> str:
+    """Keep useful database diagnostics out of logs' secret-bearing values."""
+
+    message = " ".join(str(exc).split())
+    if not message:
+        return "(no exception message)"
+    redacted_message = _SENSITIVE_EXCEPTION_VALUE.sub(r"\1=[redacted]", message)
+    return redacted_message[:500]
 
 
 def api_exception_handler(exc: Exception, context: dict[str, Any]) -> Response | None:
@@ -19,12 +34,14 @@ def api_exception_handler(exc: Exception, context: dict[str, Any]) -> Response |
 
         view = context.get("view")
         view_name = view.__class__.__name__ if view is not None else "unknown view"
-        safe_exception = RuntimeError("Unhandled API exception")
+        safe_message = _safe_exception_message(exc)
+        safe_exception = RuntimeError(safe_message)
         logger.error(
-            "Unhandled API exception in %s (%s)",
+            "Unhandled API exception in %s (%s): %s",
             view_name,
             type(exc).__name__,
-            exc_info=(RuntimeError, safe_exception, exc.__traceback__),
+            safe_message,
+            exc_info=(type(exc), safe_exception, exc.__traceback__),
         )
         return Response({"detail": "Internal server error."}, status=500)
 
