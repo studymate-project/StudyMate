@@ -15,7 +15,7 @@ const initialForm = { name: '', email: '', password: '', college: '', course: ''
 
 function Signup() {
   const navigate = useNavigate()
-  const { signUp } = useAuth()
+  const { signIn, signUp } = useAuth()
   const [form, setForm] = useState(initialForm)
   const [interests, setInterests] = useState(['Java', 'DSA', 'Web Development'])
   const [errors, setErrors] = useState({})
@@ -51,15 +51,17 @@ function Signup() {
     setIsSubmitting(true)
     setNotice('')
     try {
+      const credentials = { email: form.email.trim(), password: form.password }
       await signUp({
         name: form.name.trim(),
-        email: form.email.trim(),
+        email: credentials.email,
         password: form.password,
         college: form.college.trim(),
         course: form.course.trim(),
         semester: form.semester,
       })
-      navigate('/login', { replace: true, state: { notice: 'Account created. Log in to continue.' } })
+      const result = await signIn(credentials)
+      navigate(result.user?.profile?.onboarding_completed ? '/home' : '/onboarding', { replace: true })
     } catch (error) {
       const fieldErrors = getApiFieldErrors(error)
       setErrors((current) => ({ ...current, ...fieldErrors }))

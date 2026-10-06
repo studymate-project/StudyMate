@@ -65,7 +65,7 @@ export const apiClient = axios.create({
 })
 
 function canRefreshRequest(config) {
-  if (!config || config._authRetry) return false
+  if (!config || config._authRetry || config._skipAuthRefresh) return false
   const path = config.url || ''
   return !['/auth/login/', '/auth/signup/', '/auth/refresh/', '/auth/logout/'].some((endpoint) => path.includes(endpoint))
 }

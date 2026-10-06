@@ -3,7 +3,7 @@ import { getApiErrorMessage } from '../api/errors'
 import { useAuth } from './useAuth'
 
 function AuthLoading() {
-  return <main className="flex min-h-[calc(100svh-4rem)] items-center justify-center bg-[var(--color-band)] px-4 text-center text-[var(--color-text)]"><p role="status">Checking your session…</p></main>
+  return null
 }
 
 function AuthError({ error, onRetry }) {
@@ -15,6 +15,15 @@ function AuthError({ error, onRetry }) {
       </div>
     </main>
   )
+}
+
+export function AuthGate({ children }) {
+  const { status, error, retryInitialization } = useAuth()
+
+  if (status === 'loading') return <AuthLoading />
+  if (status === 'error') return <AuthError error={error} onRetry={retryInitialization} />
+
+  return children
 }
 
 export function ProtectedRoute({ children }) {

@@ -1,5 +1,7 @@
 import { apiClient } from './client'
 
+let sessionRestoreRequest
+
 function getUser(data) {
   return data?.user || null
 }
@@ -14,8 +16,8 @@ export async function signup(payload) {
   return response.data
 }
 
-export async function getCurrentUser() {
-  const response = await apiClient.get('/auth/me/')
+export async function getCurrentUser(config) {
+  const response = await apiClient.get('/auth/me/', config)
   return getUser(response.data)
 }
 
@@ -24,9 +26,11 @@ export async function refreshSession() {
   return response.data
 }
 
-export async function restoreSession() {
+async function restoreSessionOnce() {
+  const restoreConfig = { _skipAuthRefresh: true }
+
   try {
-    return await getCurrentUser()
+    return await getCurrentUser(restoreConfig)
   } catch (error) {
     if (error?.status !== 401) throw error
 
@@ -40,8 +44,18 @@ export async function restoreSession() {
       throw refreshError
     }
 
-    return getCurrentUser()
+    return getCurrentUser(restoreConfig)
   }
+}
+
+export function restoreSession() {
+  if (!sessionRestoreRequest) {
+    sessionRestoreRequest = restoreSessionOnce().finally(() => {
+      sessionRestoreRequest = undefined
+    })
+  }
+
+  return sessionRestoreRequest
 }
 
 export async function logout() {
