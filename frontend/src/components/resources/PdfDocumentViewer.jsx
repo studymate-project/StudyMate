@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
+import Spinner from '../common/Spinner'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -91,7 +92,7 @@ function PdfDocumentViewer({ url, onReady, onError }) {
 
   return (
     <div className="relative min-h-[640px] bg-slate-200 p-4 sm:p-6">
-      {status === 'loading' ? <p className="absolute inset-0 z-10 flex items-center justify-center font-bold text-slate-700">Loading document...</p> : null}
+      {status === 'loading' ? <div className="absolute inset-0 z-10 flex items-center justify-center"><Spinner label="Loading document" tone="muted" /></div> : null}
       {status === 'error' ? <p className="flex min-h-[590px] items-center justify-center font-bold text-slate-700">Unable to render this PDF.</p> : null}
       <div ref={viewerRef} className="mx-auto flex max-w-[900px] flex-col gap-4" aria-label="PDF document pages" />
     </div>

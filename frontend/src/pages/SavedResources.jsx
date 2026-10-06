@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { getApiErrorMessage, listSavedResources, unsaveResource } from '../api'
 import EmptyState from '../components/common/EmptyState'
 import Button from '../components/common/Button'
+import Spinner from '../components/common/Spinner'
 import Footer from '../components/layout/Footer'
 import Toast from '../components/common/Toast'
 
@@ -66,7 +67,7 @@ function SavedResources() {
   }
 
   if (status === 'loading') {
-    return <SavedResourcesPageState title="Loading saved resources" message="Fetching your saved resources..." />
+    return <SavedResourcesPageState loadingLabel="Loading saved resources" />
   }
 
   if (status === 'error') {
@@ -140,8 +141,8 @@ function SavedItem({ saved, isRemoving, onRemove }) {
   )
 }
 
-function SavedResourcesPageState({ title, message, action = null }) {
-  return <><main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[1260px] items-center justify-center px-5 py-12 sm:px-8 lg:px-10"><section className="w-full max-w-xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-7 text-center"><h1 className="text-xl font-semibold text-white">{title}</h1><p className="mt-2 text-sm text-[var(--color-text)]">{message}</p>{action}</section></main><Footer /></>
+function SavedResourcesPageState({ title, message, action = null, loadingLabel = '' }) {
+  return <><main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[1260px] items-center justify-center px-5 py-12 sm:px-8 lg:px-10"><section className="flex w-full max-w-xl items-center justify-center border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-7 text-center">{loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-xl font-semibold text-white">{title}</h1><p className="mt-2 text-sm text-[var(--color-text)]">{message}</p>{action}</div>}</section></main><Footer /></>
 }
 
 export default SavedResources

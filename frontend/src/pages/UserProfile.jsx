@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { followProfile, getApiErrorMessage, getPublicProfile, listQuestions, listResources, unfollowProfile } from '../api'
 import Button from '../components/common/Button'
+import Spinner from '../components/common/Spinner'
 import { useAuth } from '../auth/useAuth'
 
 const initialState = { status: 'loading', queryKey: null, user: null, profile: null, resources: [], questions: [], error: null }
@@ -43,7 +44,7 @@ function UserProfile() {
   }, [username])
 
   const isCurrentProfile = state.queryKey?.toLowerCase() === username?.toLowerCase()
-  if (!isCurrentProfile || state.status === 'loading') return <ProfileMessage title="Loading Profile" message="Fetching this StudyMate member..." showBackLink={false} />
+  if (!isCurrentProfile || state.status === 'loading') return <ProfileMessage loadingLabel="Loading profile" showBackLink={false} />
   if (state.status === 'error') return <ProfileMessage title={state.error?.status === 404 ? 'User Not Found' : 'Unable to Load Profile'} message={state.error?.status === 404 ? 'This profile may have been moved or removed.' : getApiErrorMessage(state.error)} />
 
   const { user, profile, resources, questions } = state
@@ -103,8 +104,8 @@ function UserProfile() {
   )
 }
 
-function ProfileMessage({ title, message, showBackLink = true }) {
-  return <div className="mx-auto max-w-[900px] px-5 py-20 text-center"><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/community" className="mt-7">Back to Community</Button> : null}</div>
+function ProfileMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
+  return <div className="mx-auto flex max-w-[900px] justify-center px-5 py-20 text-center">{loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/community" className="mt-7">Back to Community</Button> : null}</div>}</div>
 }
 
 function ProfileList({ title, empty, children }) {

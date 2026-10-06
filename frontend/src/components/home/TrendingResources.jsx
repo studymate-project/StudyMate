@@ -1,4 +1,5 @@
 import { getApiErrorMessage } from '../../api'
+import Spinner from '../common/Spinner'
 import { useResourceList } from '../../hooks/useResourceList'
 import ResourceCard from './ResourceCard'
 
@@ -11,7 +12,7 @@ function TrendingResources() {
         <h2 className="section-title">Trending Resources</h2>
         <p className="section-copy">Most viewed and downloaded this week</p>
         <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-          {loading ? <p className="text-sm font-black text-[var(--color-text)]">Loading resources...</p> : null}
+          {loading ? <div className="col-span-full flex justify-center py-2"><Spinner label="Loading resources" /></div> : null}
           {!loading && error ? <p className="text-sm font-black text-[var(--color-text)]">{getApiErrorMessage(error)}</p> : null}
           {!loading && !error && resources.length === 0 ? <p className="text-sm font-black text-[var(--color-text)]">No resources available yet.</p> : null}
           {!loading && !error

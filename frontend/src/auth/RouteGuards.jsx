@@ -1,9 +1,10 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { getApiErrorMessage } from '../api/errors'
+import Spinner from '../components/common/Spinner'
 import { useAuth } from './useAuth'
 
 function AuthLoading() {
-  return null
+  return <main className="flex min-h-[calc(100svh-4rem)] items-center justify-center bg-[var(--color-band)] px-4 text-center text-[var(--color-text)]"><Spinner label="Loading session" /></main>
 }
 
 function AuthError({ error, onRetry }) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Button from '../components/common/Button'
+import Spinner from '../components/common/Spinner'
 import Footer from '../components/layout/Footer'
 import ProfileHeader from '../components/profile/ProfileHeader'
 import ProfileResources from '../components/profile/ProfileResources'
@@ -59,7 +60,7 @@ function StudentProfile() {
   }
 
   if (profileState.status === 'loading') {
-    return <ProfilePageState title="Loading profile" message="Fetching your StudyMate profile..." />
+    return <ProfilePageState loadingLabel="Loading profile" />
   }
 
   if (profileState.status === 'error') {
@@ -85,8 +86,8 @@ function StudentProfile() {
   return <><ProfileHeader user={user} profile={profile} editable avatarBusy={avatarState.status === 'loading'} avatarError={avatarState.error} onAvatarFile={updateAvatar} onAvatarUrl={updateAvatar} action={<Button to="/profile/edit" variant="secondary" className="min-h-9 px-4 text-sm">Edit Profile</Button>} /><main className="mx-auto min-h-[calc(100svh-26rem)] w-full max-w-[1260px] px-5 py-7 sm:px-8 lg:px-10"><div className="overflow-x-auto border-b border-[var(--color-border)]"><div className="flex min-w-max justify-between gap-7" role="tablist" aria-label="Profile content">{tabs.map((tab) => <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`min-h-12 border-b-[3px] px-2 text-sm font-semibold ${activeTab === tab ? 'border-[#55b7ee] text-[#55b7ee]' : 'border-transparent text-[var(--color-text)] hover:text-white'}`}>{tab}</button>)}</div></div><div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]"><section>{tabContent}</section><aside className="space-y-6"><Achievements achievements={profile.achievements} /><RecentQuestions questions={profile.recentQuestions} /></aside></div></main><Footer /></>
 }
 
-function ProfilePageState({ title, message, action = null }) {
-  return <><main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[1260px] items-center justify-center px-5 py-12 sm:px-8 lg:px-10"><section className="w-full max-w-xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-7 text-center"><h1 className="text-xl font-semibold text-white">{title}</h1><p className="mt-2 text-sm text-[var(--color-text)]">{message}</p>{action}</section></main><Footer /></>
+function ProfilePageState({ title, message, action = null, loadingLabel = '' }) {
+  return <><main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[1260px] items-center justify-center px-5 py-12 sm:px-8 lg:px-10"><section className="flex w-full max-w-xl items-center justify-center border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-7 text-center">{loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-xl font-semibold text-white">{title}</h1><p className="mt-2 text-sm text-[var(--color-text)]">{message}</p>{action}</div>}</section></main><Footer /></>
 }
 
 export default StudentProfile

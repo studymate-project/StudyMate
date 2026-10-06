@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { createAnswer, getApiErrorMessage, getQuestionBySlug, listAnswers, removeAnswerUpvote, upvoteAnswer } from '../api'
 import Button from '../components/common/Button'
+import Spinner from '../components/common/Spinner'
 
 const initialState = {
   question: null,
@@ -11,12 +12,10 @@ const initialState = {
   queryKey: null,
 }
 
-function QuestionMessage({ title, message, showBackLink = true }) {
+function QuestionMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
   return (
-    <div className="mx-auto max-w-[900px] px-5 py-20 text-center">
-      <h1 className="text-4xl font-black text-white">{title}</h1>
-      <p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>
-      {showBackLink ? <Button to="/community" className="mt-7">Back to Community</Button> : null}
+    <div className="mx-auto flex max-w-[900px] justify-center px-5 py-20 text-center">
+      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/community" className="mt-7">Back to Community</Button> : null}</div>}
     </div>
   )
 }
@@ -60,7 +59,7 @@ function QuestionDetailsView({ slug }) {
   const question = isCurrentQuery ? state.question : null
   const error = isCurrentQuery ? state.error : null
 
-  if (loading) return <QuestionMessage title="Loading Question" message="Fetching the latest question details..." showBackLink={false} />
+  if (loading) return <QuestionMessage loadingLabel="Loading question" showBackLink={false} />
   if (error?.status === 404) return <QuestionMessage title="Question Not Found" message="This question may have been moved or removed." />
   if (error) return <QuestionMessage title="Unable to Load Question" message={getApiErrorMessage(error)} />
   if (!question) return <QuestionMessage title="Question Not Found" message="This question may have been moved or removed." />

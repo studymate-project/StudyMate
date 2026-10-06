@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getApiErrorMessage, listNotifications, markAllNotificationsRead, markNotificationRead } from '../api'
 import Badge from '../components/common/Badge'
 import Button from '../components/common/Button'
+import Spinner from '../components/common/Spinner'
 import Toast from '../components/common/Toast'
 import Footer from '../components/layout/Footer'
 import NotificationGroup from '../components/notifications/NotificationGroup'
@@ -48,7 +49,7 @@ function Notifications() {
   }
 
   if (status === 'loading') {
-    return <NotificationsPageState title="Loading notifications" message="Fetching your latest notifications..." />
+    return <NotificationsPageState loadingLabel="Loading notifications" />
   }
 
   if (status === 'error') {
@@ -101,8 +102,8 @@ function Notifications() {
   return <><main className="mx-auto min-h-[calc(100svh-8rem)] w-full max-w-[1260px] px-5 py-7 sm:px-8 lg:px-10"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-3"><h1 className="text-2xl font-bold text-white sm:text-3xl">Notifications</h1>{unreadCount ? <Badge className="min-h-6 text-xs">{unreadCount} New</Badge> : null}</div><p className="mt-2 text-sm font-medium text-[var(--color-text)]">Stay updated with activity on your account.</p></div><Button variant="secondary" className="self-start text-sm" onClick={markAllRead} disabled={markingAllRead}>{markingAllRead ? 'Marking...' : 'Mark all as read'}</Button></div><div className="mt-5"><NotificationTabs tabs={notificationTabs} activeTab={activeTab} onChange={setActiveTab} /></div>{visible.length ? groups.map((group) => <NotificationGroup key={group} title={group} notifications={visible.filter((notification) => notification.group === group)} onRead={markRead} />) : <section className="mt-7 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center"><h2 className="text-lg font-semibold text-white">No notifications here</h2><p className="mt-2 text-sm text-[var(--color-text)]">Try another filter or check back when there is new activity.</p></section>}{!unreadCount && visible.length ? <p className="mt-6 text-center text-sm text-[var(--color-text)]">You are all caught up.</p> : null}</main><Footer />{toast ? <Toast {...toast} onDismiss={() => setToast(null)} /> : null}</>
 }
 
-function NotificationsPageState({ title, message, action = null }) {
-  return <><main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[1260px] items-center justify-center px-5 py-12 sm:px-8 lg:px-10"><section className="w-full max-w-xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-7 text-center"><h1 className="text-xl font-semibold text-white">{title}</h1><p className="mt-2 text-sm text-[var(--color-text)]">{message}</p>{action}</section></main><Footer /></>
+function NotificationsPageState({ title, message, action = null, loadingLabel = '' }) {
+  return <><main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[1260px] items-center justify-center px-5 py-12 sm:px-8 lg:px-10"><section className="flex w-full max-w-xl items-center justify-center border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-7 text-center">{loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-xl font-semibold text-white">{title}</h1><p className="mt-2 text-sm text-[var(--color-text)]">{message}</p>{action}</div>}</section></main><Footer /></>
 }
 
 export default Notifications

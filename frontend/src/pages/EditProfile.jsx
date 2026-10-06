@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getApiErrorMessage, getCurrentProfile, listAcademicLevels, listCourses, listEducationBackgrounds, updateProfile } from '../api'
 import Button from '../components/common/Button'
+import Spinner from '../components/common/Spinner'
 import { useAuth } from '../auth/useAuth'
 
 const emptyForm = {
@@ -81,7 +82,7 @@ function EditProfile() {
   if (authStatus !== 'authenticated') {
     return <ProfileMessage title="Sign in required" message="Sign in to edit your profile." action={<Button to="/login">Sign in</Button>} />
   }
-  if (pageState === 'loading') return <ProfileMessage title="Loading profile" message="Fetching your profile details..." />
+  if (pageState === 'loading') return <ProfileMessage loadingLabel="Loading profile" />
   if (pageState === 'error') return <ProfileMessage title="Unable to load profile" message={getApiErrorMessage(error)} action={<Button to="/profile">Back to profile</Button>} />
 
   const updateField = (field, value) => {
@@ -149,8 +150,8 @@ function SelectField({ label, value, onChange, options, placeholder, disabled = 
   return <label className="block text-sm font-semibold text-white">{label}<select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} className="mt-2 block min-h-11 w-full border-2 border-[var(--color-border)] bg-[var(--color-band)] px-2 text-sm text-white outline-none focus:border-[#55b7ee] disabled:opacity-60"><option value="">{placeholder}</option>{options.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
 }
 
-function ProfileMessage({ title, message, action = null }) {
-  return <main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[900px] items-center justify-center px-5 py-12 text-center"><section><h1 className="text-2xl font-black text-white">{title}</h1><p className="mt-3 text-sm text-[var(--color-text)]">{message}</p>{action ? <div className="mt-5">{action}</div> : null}</section></main>
+function ProfileMessage({ title, message, action = null, loadingLabel = '' }) {
+  return <main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[900px] items-center justify-center px-5 py-12 text-center">{loadingLabel ? <Spinner label={loadingLabel} /> : <section><h1 className="text-2xl font-black text-white">{title}</h1><p className="mt-3 text-sm text-[var(--color-text)]">{message}</p>{action ? <div className="mt-5">{action}</div> : null}</section>}</main>
 }
 
 export default EditProfile

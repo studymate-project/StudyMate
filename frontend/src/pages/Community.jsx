@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getApiErrorMessage, listQuestions } from '../api'
 import Button from '../components/common/Button'
+import Spinner from '../components/common/Spinner'
 
 const tabs = ['Latest', 'Trending', 'Unanswered', 'Popular']
 const topics = ['Java', 'DSA', 'DBMS', 'OS', 'React', 'Python']
@@ -66,7 +67,7 @@ function Community() {
           </div>
 
           <section className="mt-4 space-y-3">
-            {loading ? <p className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 font-black text-[var(--color-text)]">Loading questions...</p> : null}
+            {loading ? <div className="flex justify-center border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5"><Spinner label="Loading questions" /></div> : null}
             {!loading && error ? <p role="alert" className="border-2 border-[#ff6b82] bg-[#3d1622] p-5 font-black text-[#ffadb6]">{error}</p> : null}
             {!loading && !error && visibleQuestions.length === 0 ? <p className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 font-black text-[var(--color-text)]">No questions have been posted yet.</p> : null}
             {!loading && !error ? visibleQuestions.map((question) => <CommunityQuestionCard key={question.id} question={question} />) : null}

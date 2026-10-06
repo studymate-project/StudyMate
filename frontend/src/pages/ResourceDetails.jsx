@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getApiErrorMessage } from '../api'
 import { getResourceBySlug, trackResourceView } from '../api/resources'
+import Spinner from '../components/common/Spinner'
 import PdfPreview from '../components/resources/PdfPreview'
 import RelatedResourceList from '../components/resources/RelatedResourceList'
 import ResourceHeader from '../components/resources/ResourceHeader'
@@ -18,12 +19,10 @@ const initialState = {
   queryKey: null,
 }
 
-function ResourceMessage({ title, message, showBackLink = true }) {
+function ResourceMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
   return (
-    <div className="mx-auto w-full max-w-[900px] px-5 py-20 text-center sm:px-8">
-      <h1 className="text-4xl font-black text-white">{title}</h1>
-      <p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>
-      {showBackLink ? <Link className="mt-7 inline-flex min-h-11 items-center border border-[var(--color-primary)] bg-[var(--color-primary)] px-5 font-black text-white" to="/explore">Back to Explore</Link> : null}
+    <div className="mx-auto flex w-full max-w-[900px] justify-center px-5 py-20 text-center sm:px-8">
+      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Link className="mt-7 inline-flex min-h-11 items-center border border-[var(--color-primary)] bg-[var(--color-primary)] px-5 font-black text-white" to="/explore">Back to Explore</Link> : null}</div>}
     </div>
   )
 }
@@ -91,7 +90,7 @@ function ResourceDetailsView({ slug }) {
   const resource = isCurrentQuery ? state.resource : null
   const error = isCurrentQuery ? state.error : null
 
-  if (loading) return <ResourceMessage title="Loading Resource" message="Fetching the latest resource details..." showBackLink={false} />
+  if (loading) return <ResourceMessage loadingLabel="Loading resource" showBackLink={false} />
   if (error?.status === 404) return <ResourceMessage title="Resource Not Found" message="This resource may have been moved or removed." />
   if (error) return <ResourceMessage title="Unable to Load Resource" message={getApiErrorMessage(error)} />
   if (!resource) return <ResourceMessage title="Resource Not Found" message="This resource may have been moved or removed." />

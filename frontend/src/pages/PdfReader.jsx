@@ -3,16 +3,15 @@ import { Link, useParams } from 'react-router-dom'
 import { getApiErrorMessage } from '../api'
 import { getResourceBySlug } from '../api/resources'
 import Button from '../components/common/Button'
+import Spinner from '../components/common/Spinner'
 import PdfDocumentViewer from '../components/resources/PdfDocumentViewer'
 
 const initialState = { resource: null, loading: true, error: null, queryKey: null }
 
-function ReaderMessage({ title, message, showBackLink = true }) {
+function ReaderMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
   return (
-    <div className="mx-auto max-w-[900px] px-5 py-20 text-center">
-      <h1 className="text-4xl font-black text-white">{title}</h1>
-      <p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>
-      {showBackLink ? <Button to="/explore" className="mt-7">Back to Explore</Button> : null}
+    <div className="mx-auto flex max-w-[900px] justify-center px-5 py-20 text-center">
+      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/explore" className="mt-7">Back to Explore</Button> : null}</div>}
     </div>
   )
 }
@@ -51,7 +50,7 @@ function PdfReader() {
     if (resourceUrl) setMediaState({ url: resourceUrl, status: 'error' })
   }, [resourceUrl])
 
-  if (!isCurrentQuery || state.loading) return <ReaderMessage title="Loading Resource" message="Fetching the latest resource details..." showBackLink={false} />
+  if (!isCurrentQuery || state.loading) return <ReaderMessage loadingLabel="Loading resource" showBackLink={false} />
   if (error?.status === 404) return <ReaderMessage title="Resource Not Found" message="This resource may have been moved or removed." />
   if (error) return <ReaderMessage title="Unable to Load Resource" message={getApiErrorMessage(error)} />
   if (!resource) return <ReaderMessage title="Resource Not Found" message="This resource may have been moved or removed." />

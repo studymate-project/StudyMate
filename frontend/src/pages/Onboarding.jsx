@@ -4,6 +4,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { getApiErrorMessage } from '../api/errors'
 import { listAcademicLevels, listCourses, listEducationBackgrounds, listInterests, submitOnboarding } from '../api/onboarding'
 import { useAuth } from '../auth/useAuth'
+import Spinner from '../components/common/Spinner'
 import { Navigation, OnboardingHeader, RecommendationCard, SelectionCard } from '../components/onboarding/OnboardingPrimitives'
 import './Onboarding.css'
 
@@ -42,7 +43,7 @@ function sameId(first, second) {
 }
 
 function CatalogState({ state, loadingMessage, emptyMessage, onRetry }) {
-  if (state.status === 'loading') return <p className="selection-count" role="status">{loadingMessage}</p>
+  if (state.status === 'loading') return <div className="selection-count flex justify-center"><Spinner label={loadingMessage} /></div>
   if (state.status === 'error') {
     return <div className="selection-count" role="alert"><p>{getApiErrorMessage(state.error)}</p><button type="button" onClick={onRetry} className="mt-2 underline">Try again</button></div>
   }

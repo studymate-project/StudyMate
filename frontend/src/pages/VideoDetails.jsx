@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { getApiErrorMessage } from '../api'
 import { getVideoBySlug } from '../api/videos'
 import Button from '../components/common/Button'
+import Spinner from '../components/common/Spinner'
 import YouTubePlayer from '../components/video/YouTubePlayer'
 
 const formatNumber = (value) => Number(value).toLocaleString('en-IN')
@@ -15,12 +16,10 @@ const initialState = {
   queryKey: null,
 }
 
-function VideoMessage({ title, message, showBackLink = true }) {
+function VideoMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
   return (
-    <div className="mx-auto max-w-[900px] px-5 py-20 text-center">
-      <h1 className="text-4xl font-black text-white">{title}</h1>
-      <p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>
-      {showBackLink ? <Button to="/explore" className="mt-7">Back to Explore</Button> : null}
+    <div className="mx-auto flex max-w-[900px] justify-center px-5 py-20 text-center">
+      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/explore" className="mt-7">Back to Explore</Button> : null}</div>}
     </div>
   )
 }
@@ -55,7 +54,7 @@ function VideoDetailsView({ slug }) {
   const video = isCurrentQuery ? state.video : null
   const error = isCurrentQuery ? state.error : null
 
-  if (loading) return <VideoMessage title="Loading Video" message="Fetching the latest video details..." showBackLink={false} />
+  if (loading) return <VideoMessage loadingLabel="Loading video" showBackLink={false} />
   if (error?.status === 404) return <VideoMessage title="Video Not Found" message="This video may have been moved or removed." />
   if (error) return <VideoMessage title="Unable to Load Video" message={getApiErrorMessage(error)} />
   if (!video) return <VideoMessage title="Video Not Found" message="This video may have been moved or removed." />
