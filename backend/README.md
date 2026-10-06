@@ -91,15 +91,19 @@ pip install -r requirements/base.txt && python manage.py collectstatic --noinput
 Start Command:
 
 ```text
-gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --access-logfile - --error-logfile -
+sh start.sh
 ```
 
-Do not use Django's development server on Render. After the first deploy, run
-the migration command from the Render Shell or a one-off job:
+Set this as the service's Render Start Command. Existing Render services
+configured with the previous Gunicorn command need this one-time dashboard
+setting update; after that, every deployment runs the committed startup
+script.
 
-```text
-python manage.py migrate --noinput
-```
+Do not use Django's development server on Render. `start.sh` applies all
+pending migrations with `--noinput` and only starts Gunicorn if migrations
+complete successfully. This includes the production-only
+`token_blacklist` migrations that create the SimpleJWT outstanding-token and
+blacklisted-token tables.
 
 The health-check URL is `https://<render-service>.onrender.com/api/health/`.
 Configure Render's health check path to `/api/health/`.
