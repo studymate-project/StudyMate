@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import environ
+from corsheaders.defaults import default_headers
 from django.core.exceptions import ImproperlyConfigured
 
 
@@ -282,6 +283,7 @@ FRONTEND_URL = env('FRONTEND_URL', default='').strip().rstrip('/')
 configured_cors_origins = _env_list('CORS_ALLOWED_ORIGINS')
 CORS_ALLOWED_ORIGINS = configured_cors_origins or ([FRONTEND_URL] if FRONTEND_URL else [])
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = (*default_headers, "x-upload-id")
 CORS_URLS_REGEX = r'^/api/.*$'
 configured_csrf_origins = _env_list('CSRF_TRUSTED_ORIGINS')
 CSRF_TRUSTED_ORIGINS = configured_csrf_origins or ([FRONTEND_URL] if FRONTEND_URL else [])
