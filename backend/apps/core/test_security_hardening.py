@@ -55,6 +55,29 @@ class AuthenticationCSRFTests(TestCase):
         )
         self.client = APIClient(enforce_csrf_checks=True)
 
+    def test_csrf_bootstrap_returns_token_for_cross_origin_clients(self):
+        response = self.client.get("/api/auth/csrf/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["csrf_token"])
+        self.assertIn("csrftoken", response.cookies)
+
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {"email": "csrf-user@example.com", "password": "not-used-in-test"},
+            format="json",
+            HTTP_X_CSRFTOKEN=response.data["csrf_token"],
+        )
+        self.assertEqual(login_response.status_code, 200)
+
+        refresh_response = self.client.post(
+            "/api/auth/refresh/",
+            {},
+            format="json",
+            HTTP_X_CSRFTOKEN=response.data["csrf_token"],
+        )
+        self.assertEqual(refresh_response.status_code, 200)
+
     def test_login_requires_csrf_token_for_browser_style_requests(self):
         response = self.client.post(
             "/api/auth/login/",

@@ -32,8 +32,8 @@ function AppRoutes() {
           <Route path="signup" element={<PublicOnlyRoute><Signup /></PublicOnlyRoute>} />
           <Route path="onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
           <Route element={<AppLayout />}>
-            <Route index element={<Home />} />
-            <Route path="home" element={<Home />} />
+            <Route index element={<ProtectedRoute><Home /></ProtectedRoute>} />
+            <Route path="home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
             <Route path="explore" element={<Explore />} />
             <Route path="resources/:slug/read" element={<PdfReader />} />
             <Route path="resources/:slug" element={<ResourceDetails />} />

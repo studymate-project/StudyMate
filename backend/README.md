@@ -175,7 +175,8 @@ The public health check is available at `GET /api/health/` and returns:
 `frontend/` remains a separate React/Vite client. The API is served from
 `/api/`; CORS is limited to `CORS_ALLOWED_ORIGINS`, and CSRF trusted origins
 are configured separately for HTTP-only-cookie authentication. Browser clients
-can request `/api/auth/csrf/` to bootstrap Django's readable CSRF cookie before
+can request `/api/auth/csrf/` to bootstrap Django's CSRF cookie and receive the
+non-secret token before
 unsafe cookie-authenticated requests. Future APIs can be grouped under `/api/auth/`, `/api/users/`,
 `/api/education/`, `/api/resources/`, `/api/videos/`, `/api/questions/`,
 `/api/notifications/`, and `/api/search/`.

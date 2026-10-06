@@ -71,6 +71,10 @@ HEALTH_RESPONSE = inline_serializer(
     "HealthResponse",
     fields={"status": serializers.CharField(read_only=True)},
 )
+CSRF_RESPONSE = inline_serializer(
+    "CsrfResponse",
+    fields={"csrf_token": serializers.CharField(read_only=True)},
+)
 
 
 def enforce_cookie_csrf(request):
@@ -102,14 +106,21 @@ class SignupView(CreateAPIView):
 
 
 class CsrfTokenView(APIView):
-    """Issue Django's readable CSRF cookie for browser API clients."""
+    """Issue Django's CSRF cookie and token for browser API clients."""
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
 
+    @extend_schema(
+        summary="Get a CSRF token",
+        responses={200: CSRF_RESPONSE},
+    )
     def get(self, request: Request) -> Response:
-        get_token(request)
-        return Response(status=204)
+        # The cookie is still set for Django's double-submit validation. The
+        # response body also carries the non-secret token because a browser
+        # hosted on a different origin cannot read a cookie scoped to the API
+        # host (for example, Vercel cannot read a Render cookie).
+        return Response({"csrf_token": get_token(request)})
 
 
 class LoginView(APIView):

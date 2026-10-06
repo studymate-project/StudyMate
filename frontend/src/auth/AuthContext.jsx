@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
       .then((nextUser) => {
         if (!active) return
         setUser(nextUser)
-        setStatus('authenticated')
+        setStatus(nextUser ? 'authenticated' : 'unauthenticated')
         setInitializationError(null)
       })
       .catch((error) => {

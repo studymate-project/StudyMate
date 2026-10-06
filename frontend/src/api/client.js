@@ -26,15 +26,21 @@ const csrfBootstrapClient = axios.create({
 
 let csrfBootstrapRequest
 let refreshRequest
+let csrfToken
 
 async function ensureCsrfCookie() {
+  if (csrfToken) return csrfToken
+
   const existingToken = readCookie(CSRF_COOKIE_NAME)
   if (existingToken) return existingToken
 
   if (!csrfBootstrapRequest) {
     csrfBootstrapRequest = csrfBootstrapClient
       .get(CSRF_BOOTSTRAP_PATH)
-      .then(() => readCookie(CSRF_COOKIE_NAME))
+      .then((response) => {
+        csrfToken = response.data?.csrf_token || readCookie(CSRF_COOKIE_NAME)
+        return csrfToken
+      })
       .catch((error) => {
         throw normalizeApiError(error)
       })

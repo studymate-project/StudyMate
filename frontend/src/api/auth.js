@@ -30,7 +30,16 @@ export async function restoreSession() {
   } catch (error) {
     if (error?.status !== 401) throw error
 
-    await refreshSession()
+    try {
+      await refreshSession()
+    } catch (refreshError) {
+      // A visitor without an access or refresh cookie is expected to fail
+      // refresh. Preserve other failures (including CSRF/configuration 403s)
+      // so they are not mistaken for an anonymous session.
+      if (refreshError?.status === 401) return null
+      throw refreshError
+    }
+
     return getCurrentUser()
   }
 }

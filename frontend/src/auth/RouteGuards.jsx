@@ -19,12 +19,15 @@ function AuthError({ error, onRetry }) {
 
 export function ProtectedRoute({ children }) {
   const location = useLocation()
-  const { status, error, retryInitialization } = useAuth()
+  const { status, user, error, retryInitialization } = useAuth()
 
   if (status === 'loading') return <AuthLoading />
   if (status === 'error') return <AuthError error={error} onRetry={retryInitialization} />
   if (status === 'unauthenticated') {
     return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
+  }
+  if (!user?.profile?.onboarding_completed && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace state={{ from: `${location.pathname}${location.search}` }} />
   }
 
   return children

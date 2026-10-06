@@ -338,8 +338,8 @@ SIMPLE_JWT = {
 }
 
 # Session/CSRF cookies follow the same local-vs-production secure default as
-# auth cookies. CSRF remains readable by the frontend so it can send the
-# required X-CSRFToken header for unsafe cookie-authenticated requests.
+# auth cookies. The CSRF bootstrap endpoint returns the non-secret token for
+# cross-origin frontends, which send it in the required X-CSRFToken header.
 SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=not DEBUG)
 SESSION_COOKIE_SAMESITE = env('SESSION_COOKIE_SAMESITE', default=JWT_COOKIE_SAMESITE)
 CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=not DEBUG)
