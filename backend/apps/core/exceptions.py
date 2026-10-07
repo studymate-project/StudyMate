@@ -4,8 +4,6 @@ import logging
 import re
 from typing import Any
 
-from django.conf import settings
-
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
@@ -29,9 +27,6 @@ def _safe_exception_message(exc: Exception) -> str:
 def api_exception_handler(exc: Exception, context: dict[str, Any]) -> Response | None:
     response = exception_handler(exc, context)
     if response is None:
-        if settings.DEBUG:
-            return None
-
         view = context.get("view")
         view_name = view.__class__.__name__ if view is not None else "unknown view"
         safe_message = _safe_exception_message(exc)
@@ -43,7 +38,12 @@ def api_exception_handler(exc: Exception, context: dict[str, Any]) -> Response |
             safe_message,
             exc_info=(type(exc), safe_exception, exc.__traceback__),
         )
-        return Response({"detail": "Internal server error."}, status=500)
+        detail = (
+            "Unable to create your account. Please try again."
+            if view_name == "SignupView"
+            else "Something went wrong. Please try again."
+        )
+        return Response({"detail": detail}, status=500)
 
     detail = response.data.get("detail") if isinstance(response.data, dict) else None
     if response.status_code == 403 and getattr(detail, "code", None) == "not_authenticated":

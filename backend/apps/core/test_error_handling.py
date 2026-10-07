@@ -50,10 +50,19 @@ class APIErrorHandlingTests(TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response["Content-Type"], "application/json")
-        self.assertEqual(response.json(), {"detail": "Internal server error."})
+        self.assertEqual(response.json(), {"detail": "Something went wrong. Please try again."})
         self.assertNotIn("Traceback", response_text)
         self.assertIn("Unhandled API exception", log_text)
         self.assertIn("RuntimeError", log_text)
         self.assertIn("SECRET_KEY=[redacted]", log_text)
         self.assertIn("DATABASE_URL=[redacted]", log_text)
         self.assertIn("password=[redacted]", log_text)
+
+    @override_settings(DEBUG=True, ALLOWED_HOSTS=["testserver"], ROOT_URLCONF=__name__)
+    def test_unexpected_api_error_stays_json_when_debug_is_enabled(self):
+        response = self.client.get("/api/test-unexpected-error/")
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(response.json(), {"detail": "Something went wrong. Please try again."})
+        self.assertNotIn("Traceback", response.content.decode())

@@ -28,7 +28,8 @@ let csrfBootstrapRequest
 let refreshRequest
 let csrfToken
 
-async function ensureCsrfCookie() {
+async function ensureCsrfCookie({ force = false } = {}) {
+  if (force) csrfToken = undefined
   if (csrfToken) return csrfToken
 
   const existingToken = readCookie(CSRF_COOKIE_NAME)
@@ -39,6 +40,9 @@ async function ensureCsrfCookie() {
       .get(CSRF_BOOTSTRAP_PATH)
       .then((response) => {
         csrfToken = response.data?.csrf_token || readCookie(CSRF_COOKIE_NAME)
+        if (!csrfToken) {
+          throw new Error('Unable to initialize secure requests. Please try again.')
+        }
         return csrfToken
       })
       .catch((error) => {
@@ -50,6 +54,13 @@ async function ensureCsrfCookie() {
   }
 
   return csrfBootstrapRequest
+}
+
+function isCsrfFailure(error) {
+  const detail = error?.response?.data?.detail
+  return error?.response?.status === 403
+    && typeof detail === 'string'
+    && /csrf/i.test(detail)
 }
 
 export const apiClient = axios.create({
@@ -85,12 +96,12 @@ apiClient.interceptors.request.use(async (config) => {
   const method = (config.method || 'get').toLowerCase()
   if (!unsafeMethods.has(method)) return config
 
-  const csrfToken = await ensureCsrfCookie()
-  if (csrfToken) {
+  const token = await ensureCsrfCookie()
+  if (token) {
     if (config.headers?.set) {
-      config.headers.set(CSRF_HEADER_NAME, csrfToken)
+      config.headers.set(CSRF_HEADER_NAME, token)
     } else {
-      config.headers = { ...config.headers, [CSRF_HEADER_NAME]: csrfToken }
+      config.headers = { ...config.headers, [CSRF_HEADER_NAME]: token }
     }
   }
 
@@ -105,6 +116,16 @@ apiClient.interceptors.request.use(async (config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
+    if (isCsrfFailure(error) && error.config && !error.config._csrfRetry) {
+      csrfToken = undefined
+      try {
+        await ensureCsrfCookie({ force: true })
+        return apiClient({ ...error.config, _csrfRetry: true })
+      } catch {
+        // Return the original safe 403 when the browser cannot retain the CSRF cookie.
+      }
+    }
+
     if (error.response?.status === 401 && canRefreshRequest(error.config)) {
       try {
         await refreshAccessCookie()

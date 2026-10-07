@@ -1,6 +1,17 @@
 from django.db import models
 
 
+class AcademicStageType(models.TextChoices):
+    """Supported academic structures for catalog and custom profile stages."""
+
+    CLASS = "class", "Class"
+    SEMESTER = "semester", "Semester"
+    YEAR = "year", "Year"
+    LEVEL = "level", "Level"
+    STAGE = "stage", "Stage"
+    OTHER = "other", "Other"
+
+
 class CatalogBase(models.Model):
     """Common fields for active, human-readable education catalog records."""
 
@@ -42,18 +53,14 @@ class Course(models.Model):
 
 
 class AcademicLevel(models.Model):
-    class LevelType(models.TextChoices):
-        CLASS = "class", "Class"
-        SEMESTER = "semester", "Semester"
-        YEAR = "year", "Year"
-        LEVEL = "level", "Level"
-        STAGE = "stage", "Stage"
-        OTHER = "other", "Other"
+    # Keep the existing public API reference working while sharing the choices
+    # with custom stages stored on StudentProfile.
+    LevelType = AcademicStageType
 
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="academic_levels")
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=140)
-    level_type = models.CharField(max_length=16, choices=LevelType.choices)
+    level_type = models.CharField(max_length=16, choices=AcademicStageType.choices)
     order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

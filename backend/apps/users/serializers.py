@@ -2,15 +2,23 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.db.models import Q
 from django.core.validators import URLValidator
 from django.utils import timezone
 from django.utils.text import slugify
 from urllib.parse import urlsplit
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
+from drf_spectacular.utils import extend_schema_field
 
-from apps.education.models import AcademicLevel, Course, EducationBackground, Interest, StudentInterest
+from apps.education.models import (
+    AcademicLevel,
+    AcademicStageType,
+    Course,
+    EducationBackground,
+    Interest,
+    StudentInterest,
+)
+from apps.education.serializers import InterestSerializer as CatalogInterestSerializer
 from apps.interactions.models import UserFollow
 
 from .models import StudentProfile
@@ -38,6 +46,7 @@ class PublicUserSerializer(serializers.ModelSerializer):
 class StudentProfileSerializer(serializers.ModelSerializer):
     user = PublicUserSerializer(read_only=True)
     is_following = serializers.SerializerMethodField()
+    interests = serializers.SerializerMethodField()
     avatar_file = serializers.FileField(write_only=True, required=False, allow_null=True)
 
     class Meta:
@@ -52,9 +61,17 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             "avatar_file",
             "contribution_points",
             "college",
+            "country",
+            "state",
+            "city",
             "education_background",
+            "custom_background",
             "course",
+            "custom_course",
             "academic_level",
+            "academic_level_type",
+            "academic_level_value",
+            "interests",
             "onboarding_completed",
             "onboarding_completed_at",
             "created_at",
@@ -81,6 +98,8 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         return data
 
     def get_is_following(self, instance) -> bool:
+        if hasattr(instance, "_is_following"):
+            return bool(instance._is_following)
         request = self.context.get("request")
         if request is None or not request.user.is_authenticated:
             return False
@@ -89,11 +108,36 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             following=instance.user,
         ).exists()
 
+    @extend_schema_field(CatalogInterestSerializer(many=True))
+    def get_interests(self, instance):
+        return [
+            {
+                "id": student_interest.interest_id,
+                "name": student_interest.interest.name,
+                "slug": student_interest.interest.slug,
+                "description": student_interest.interest.description,
+            }
+            for student_interest in instance.student_interests.select_related("interest").all()
+        ]
+
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         profile = self.instance if isinstance(self.instance, StudentProfile) else None
         background = attrs.get("education_background", profile.education_background if profile else None)
+        custom_background = attrs.get(
+            "custom_background", profile.custom_background if profile else ""
+        )
         course = attrs.get("course", profile.course if profile else None)
+        custom_course = attrs.get("custom_course", profile.custom_course if profile else "")
         academic_level = attrs.get("academic_level", profile.academic_level if profile else None)
+        custom_stage_type = attrs.get(
+            "academic_level_type", profile.academic_level_type if profile else ""
+        )
+        custom_stage_value = attrs.get(
+            "academic_level_value", profile.academic_level_value if profile else ""
+        )
+        custom_stage_was_submitted = (
+            "academic_level_type" in attrs or "academic_level_value" in attrs
+        )
         onboarding_completed = attrs.get(
             "onboarding_completed", profile.onboarding_completed if profile else False
         )
@@ -130,6 +174,39 @@ class StudentProfileSerializer(serializers.ModelSerializer):
                     {field_name: "Select an active education option."}
                 )
 
+        background_is_other = bool(
+            background
+            and (
+                background.slug.casefold() == "other"
+                or background.name.casefold() == "other"
+            )
+        )
+        if custom_background and background and not background_is_other:
+            raise serializers.ValidationError(
+                {"custom_background": "A custom background requires the Other background option."}
+            )
+        if background_is_other and not custom_background:
+            raise serializers.ValidationError(
+                {"custom_background": "Enter a custom background when selecting Other."}
+            )
+
+        course_is_other = bool(
+            course
+            and (course.slug.casefold() == "other" or course.name.casefold() == "other")
+        )
+        if custom_course and course and not course_is_other:
+            raise serializers.ValidationError(
+                {"custom_course": "A custom course requires the Other course option."}
+            )
+        if course_is_other and not custom_course:
+            raise serializers.ValidationError(
+                {"custom_course": "Enter a custom course when selecting Other."}
+            )
+        if custom_course and not (background or custom_background):
+            raise serializers.ValidationError(
+                {"education_background": "A background is required when entering a custom course."}
+            )
+
         if course is not None and background is None:
             raise serializers.ValidationError(
                 {"education_background": "An education background is required when selecting a course."}
@@ -144,14 +221,25 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"academic_level": "The selected academic level must belong to the selected course."}
             )
-        if onboarding_completed and not (background and course and academic_level):
+        if custom_stage_was_submitted and bool(custom_stage_type) != bool(custom_stage_value):
             raise serializers.ValidationError(
-                {
-                    "onboarding_completed": (
-                        "Education background, course, and academic level are required before completion."
-                    )
-                }
+                {"academic_level_value": "Academic stage type and value must be provided together."}
             )
+        if academic_level is not None and custom_stage_was_submitted:
+            raise serializers.ValidationError(
+                {"academic_level_value": "Use either a catalog stage or a custom academic stage, not both."}
+            )
+        if onboarding_completed and not (background and course and academic_level):
+            if not (background or custom_background) or not (course or custom_course) or not (
+                academic_level or (custom_stage_type and custom_stage_value)
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "onboarding_completed": (
+                            "Education background, course, and academic level are required before completion."
+                        )
+                    }
+                )
         return attrs
 
     def update(self, instance, validated_data):
@@ -171,6 +259,15 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             validated_data["avatar_reference"] = upload_result.reference
         elif "avatar_url" in validated_data and validated_data["avatar_url"] != instance.avatar_url:
             validated_data["avatar_reference"] = ""
+
+        selected_level = validated_data.get("academic_level")
+        if selected_level is not None:
+            validated_data["academic_level_type"] = selected_level.level_type
+            validated_data["academic_level_value"] = selected_level.name
+        elif "academic_level" in validated_data:
+            validated_data["academic_level"] = None
+            validated_data["academic_level_type"] = validated_data.get("academic_level_type", "")
+            validated_data["academic_level_value"] = validated_data.get("academic_level_value", "")
 
         try:
             with transaction.atomic():
@@ -194,12 +291,22 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 class OnboardingSerializer(serializers.Serializer):
     """Validate and persist one authenticated user's final onboarding choice."""
 
-    education_background = serializers.IntegerField(min_value=1)
-    course = serializers.IntegerField(min_value=1)
-    academic_level = serializers.IntegerField(min_value=1)
+    education_background = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    custom_background = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    course = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    custom_course = serializers.CharField(max_length=160, required=False, allow_blank=True)
+    academic_level = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    academic_level_type = serializers.ChoiceField(
+        choices=AcademicStageType.choices, required=False, allow_blank=True
+    )
+    academic_level_value = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    country = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    state = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    city = serializers.CharField(max_length=120, required=False, allow_blank=True)
     interests = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
-        allow_empty=False,
+        required=False,
+        allow_empty=True,
         max_length=8,
     )
 
@@ -223,73 +330,145 @@ class OnboardingSerializer(serializers.Serializer):
                 }
             )
 
-        background = EducationBackground.objects.filter(
-            pk=attrs["education_background"], is_active=True
-        ).first()
-        if background is None:
-            raise serializers.ValidationError(
-                {"education_background": "Select a valid education background."}
-            )
+        background_id = attrs.get("education_background")
+        custom_background = attrs.get("custom_background", "").strip()
+        background = None
+        if background_id is not None:
+            background = EducationBackground.objects.filter(
+                pk=background_id, is_active=True
+            ).first()
+            if background is None:
+                raise serializers.ValidationError(
+                    {"education_background": "Select a valid education background."}
+                )
 
-        course = Course.objects.select_related("education_background").filter(
-            pk=attrs["course"],
-            is_active=True,
-            education_background__is_active=True,
-        ).first()
-        if course is None:
-            raise serializers.ValidationError({"course": "Select a valid course."})
-        if course.education_background_id != background.pk:
-            raise serializers.ValidationError(
-                {"course": "The selected course must belong to the selected education background."}
+        background_is_other = bool(
+            background
+            and (
+                background.slug.casefold() == "other"
+                or background.name.casefold() == "other"
             )
-
-        academic_level = AcademicLevel.objects.select_related(
-            "course", "course__education_background"
-        ).filter(
-            pk=attrs["academic_level"],
-            is_active=True,
-            course__is_active=True,
-            course__education_background__is_active=True,
-        ).first()
-        if academic_level is None:
-            raise serializers.ValidationError({"academic_level": "Select a valid academic level."})
-        if academic_level.course_id != course.pk:
-            raise serializers.ValidationError(
-                {"academic_level": "The selected academic level must belong to the selected course."}
-            )
-
-        interest_ids = attrs["interests"]
-        if len(interest_ids) != len(set(interest_ids)):
-            raise serializers.ValidationError(
-                {"interests": "Each interest may only be selected once."}
-            )
-
-        selected_interests = list(
-            Interest.objects.filter(pk__in=interest_ids, is_active=True)
         )
-        selected_by_id = {interest.pk: interest for interest in selected_interests}
-        missing_ids = [interest_id for interest_id in interest_ids if interest_id not in selected_by_id]
-        if missing_ids:
+        if background_is_other and not custom_background:
             raise serializers.ValidationError(
-                {"interests": "Select valid interests from the education catalog."}
+                {"custom_background": "Enter a custom background when selecting Other."}
+            )
+        if custom_background and background and not background_is_other:
+            raise serializers.ValidationError(
+                {"custom_background": "A custom background requires the Other background option."}
+            )
+        if not background and not custom_background:
+            raise serializers.ValidationError(
+                {"education_background": "Select an education background or enter a custom background."}
             )
 
-        valid_interest_ids = set(
-            Interest.objects.filter(
-                pk__in=interest_ids,
+        course_id = attrs.get("course")
+        custom_course = attrs.get("custom_course", "").strip()
+        course = None
+        if course_id is not None:
+            course = Course.objects.select_related("education_background").filter(
+                pk=course_id,
                 is_active=True,
-                courses=course,
-            ).values_list("pk", flat=True)
+                education_background__is_active=True,
+            ).first()
+            if course is None:
+                raise serializers.ValidationError({"course": "Select a valid course or program."})
+            if background and course.education_background_id != background.pk:
+                raise serializers.ValidationError(
+                    {"course": "The selected course must belong to the selected education background."}
+                )
+        course_is_other = bool(
+            course
+            and (course.slug.casefold() == "other" or course.name.casefold() == "other")
         )
-        if valid_interest_ids != set(interest_ids):
+        if course_is_other and not custom_course:
             raise serializers.ValidationError(
-                {"interests": "All selected interests must be valid for the selected course."}
+                {"custom_course": "Enter a custom course or program when selecting Other."}
             )
+        if custom_course and course and not course_is_other:
+            raise serializers.ValidationError(
+                {"custom_course": "A custom course requires the Other course option."}
+            )
+        if not course and not custom_course:
+            raise serializers.ValidationError(
+                {"course": "Select a course or program, or enter a custom course."}
+            )
+
+        academic_level_id = attrs.get("academic_level")
+        academic_level = None
+        if academic_level_id is not None:
+            academic_level = AcademicLevel.objects.select_related(
+                "course", "course__education_background"
+            ).filter(
+                pk=academic_level_id,
+                is_active=True,
+                course__is_active=True,
+                course__education_background__is_active=True,
+            ).first()
+            if academic_level is None:
+                raise serializers.ValidationError({"academic_level": "Select a valid academic level or stage."})
+            if not course:
+                raise serializers.ValidationError(
+                    {"academic_level": "A catalog academic level requires a catalog course or program."}
+                )
+            if academic_level.course_id != course.pk:
+                raise serializers.ValidationError(
+                    {"academic_level": "The selected academic level must belong to the selected course."}
+                )
+
+        custom_stage_type = attrs.get("academic_level_type", "")
+        custom_stage_value = attrs.get("academic_level_value", "").strip()
+        if bool(custom_stage_type) != bool(custom_stage_value):
+            raise serializers.ValidationError(
+                {"academic_level_value": "Academic stage type and value must be provided together."}
+            )
+        if academic_level and (custom_stage_type or custom_stage_value):
+            raise serializers.ValidationError(
+                {"academic_level_value": "Use either a catalog stage or a custom academic stage, not both."}
+            )
+        if not academic_level and not (custom_stage_type and custom_stage_value):
+            raise serializers.ValidationError(
+                {"academic_level": "Select an academic level or provide a custom academic stage."}
+            )
+
+        interest_ids = attrs.get("interests")
+        if interest_ids is not None:
+            if len(interest_ids) != len(set(interest_ids)):
+                raise serializers.ValidationError(
+                    {"interests": "Each interest may only be selected once."}
+                )
+
+            selected_interests = list(
+                Interest.objects.filter(pk__in=interest_ids, is_active=True)
+            )
+            selected_by_id = {interest.pk: interest for interest in selected_interests}
+            missing_ids = [interest_id for interest_id in interest_ids if interest_id not in selected_by_id]
+            if missing_ids:
+                raise serializers.ValidationError(
+                    {"interests": "Select valid interests from the education catalog."}
+                )
+
+            if course:
+                valid_interest_ids = set(
+                    Interest.objects.filter(
+                        pk__in=interest_ids,
+                        is_active=True,
+                        courses=course,
+                    ).values_list("pk", flat=True)
+                )
+                if valid_interest_ids != set(interest_ids):
+                    raise serializers.ValidationError(
+                        {"interests": "All selected interests must be valid for the selected course."}
+                    )
+            attrs["interests"] = [selected_by_id[interest_id] for interest_id in interest_ids]
 
         attrs["education_background"] = background
+        attrs["custom_background"] = custom_background
         attrs["course"] = course
+        attrs["custom_course"] = custom_course
         attrs["academic_level"] = academic_level
-        attrs["interests"] = [selected_by_id[interest_id] for interest_id in interest_ids]
+        attrs["academic_level_type"] = custom_stage_type
+        attrs["academic_level_value"] = custom_stage_value
         return attrs
 
     def _save_profile(self, profile, validated_data):
@@ -299,21 +478,33 @@ class OnboardingSerializer(serializers.Serializer):
 
         was_completed = profile.onboarding_completed
         profile.education_background = validated_data["education_background"]
+        profile.custom_background = validated_data.get("custom_background", profile.custom_background)
         profile.course = validated_data["course"]
+        profile.custom_course = validated_data.get("custom_course", profile.custom_course)
         profile.academic_level = validated_data["academic_level"]
+        if profile.academic_level is not None:
+            profile.academic_level_type = profile.academic_level.level_type
+            profile.academic_level_value = profile.academic_level.name
+        else:
+            profile.academic_level_type = validated_data.get("academic_level_type", "")
+            profile.academic_level_value = validated_data.get("academic_level_value", "")
+        for field_name in ("country", "state", "city"):
+            if field_name in validated_data:
+                setattr(profile, field_name, validated_data[field_name].strip())
         profile.onboarding_completed = True
         if not was_completed or profile.onboarding_completed_at is None:
             profile.onboarding_completed_at = timezone.now()
 
         profile.full_clean()
         profile.save()
-        StudentInterest.objects.filter(student_profile=profile).delete()
-        StudentInterest.objects.bulk_create(
-            [
-                StudentInterest(student_profile=profile, interest=interest)
-                for interest in validated_data["interests"]
-            ]
-        )
+        if "interests" in validated_data:
+            StudentInterest.objects.filter(student_profile=profile).delete()
+            StudentInterest.objects.bulk_create(
+                [
+                    StudentInterest(student_profile=profile, interest=interest)
+                    for interest in validated_data["interests"]
+                ]
+            )
         return profile
 
     @transaction.atomic
@@ -328,9 +519,8 @@ class OnboardingSerializer(serializers.Serializer):
 class RegistrationSerializer(serializers.Serializer):
     """Create a Django user and its initial student profile atomically.
 
-    The public signup contract uses human-readable education values. They are
-    resolved to existing catalog rows; no client-controlled ownership or user
-    fields are accepted.
+    Signup creates identity and location data only. Education selections belong
+    to onboarding so users are not forced into a semester-based flow.
     """
 
     name = serializers.CharField(max_length=120, write_only=True)
@@ -340,9 +530,10 @@ class RegistrationSerializer(serializers.Serializer):
         trim_whitespace=False,
         style={"input_type": "password"},
     )
-    college = serializers.CharField(max_length=120, write_only=True)
-    course = serializers.CharField(max_length=160, write_only=True)
-    semester = serializers.CharField(max_length=120, write_only=True)
+    college = serializers.CharField(max_length=120, write_only=True, required=False, allow_blank=True)
+    country = serializers.CharField(max_length=120, write_only=True, required=False, allow_blank=True)
+    state = serializers.CharField(max_length=120, write_only=True, required=False, allow_blank=True)
+    city = serializers.CharField(max_length=120, write_only=True, required=False, allow_blank=True)
 
     @staticmethod
     def _split_name(name: str) -> tuple[str, str]:
@@ -365,21 +556,6 @@ class RegistrationSerializer(serializers.Serializer):
             suffix += 1
         return candidate
 
-    @staticmethod
-    def _resolve_catalog_value(queryset, value: str, field_name: str):
-        matches = list(
-            queryset.filter(Q(name__iexact=value) | Q(slug__iexact=value)).order_by("pk")[:2]
-        )
-        if not matches:
-            raise serializers.ValidationError(
-                {field_name: "Select a valid value from the education catalog."}
-            )
-        if len(matches) > 1:
-            raise serializers.ValidationError(
-                {field_name: "The selected education value is ambiguous."}
-            )
-        return matches[0]
-
     def validate(self, attrs):
         name = attrs["name"].strip()
         if not name:
@@ -400,48 +576,17 @@ class RegistrationSerializer(serializers.Serializer):
         except DjangoValidationError as exc:
             raise serializers.ValidationError({"password": list(exc.messages)}) from exc
 
-        college = attrs["college"].strip()
-        course_name = attrs["course"].strip()
-        semester = attrs["semester"].strip()
-        if not college:
-            raise serializers.ValidationError({"college": "This field may not be blank."})
-        if not course_name:
-            raise serializers.ValidationError({"course": "This field may not be blank."})
-        if not semester:
-            raise serializers.ValidationError({"semester": "This field may not be blank."})
-
-        # College/university is user-provided profile data. It is not the same
-        # thing as an EducationBackground catalog row (for example,
-        # "Engineering"), so it must not be resolved against that catalog.
-        course = self._resolve_catalog_value(
-            Course.objects.filter(
-                is_active=True,
-                education_background__is_active=True,
-            ),
-            course_name,
-            "course",
-        )
-        background = course.education_background
-        academic_level = self._resolve_catalog_value(
-            AcademicLevel.objects.filter(course=course, is_active=True), semester, "semester"
-        )
-
         attrs["name"] = name
         attrs["email"] = email
-        attrs["_education_background"] = background
-        attrs["_course"] = course
-        attrs["_academic_level"] = academic_level
+        for field_name in ("college", "country", "state", "city"):
+            attrs[field_name] = attrs.get(field_name, "").strip()
         return attrs
 
     @transaction.atomic
     def create(self, validated_data):
-        background = validated_data.pop("_education_background")
-        course = validated_data.pop("_course")
-        academic_level = validated_data.pop("_academic_level")
         name = validated_data.pop("name")
         email = validated_data.pop("email")
         password = validated_data.pop("password")
-        college = validated_data.pop("college")
         first_name, last_name = self._split_name(name)
 
         user = User.objects.create_user(
@@ -454,10 +599,7 @@ class RegistrationSerializer(serializers.Serializer):
         StudentProfile.objects.create(
             user=user,
             display_name=name,
-            college=college,
-            education_background=background,
-            course=course,
-            academic_level=academic_level,
+            **validated_data,
         )
         return user
 

@@ -42,9 +42,13 @@ class QuestionSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "slug", "author", "status", "created_at", "updated_at")
 
     def get_upvotes(self, question: Question) -> int:
+        if hasattr(question, "upvotes_count"):
+            return question.upvotes_count
         return question.upvotes.count()
 
     def get_answers(self, question: Question) -> int:
+        if hasattr(question, "answers_count"):
+            return question.answers_count
         return question.answers.count()
 
     @staticmethod
@@ -92,3 +96,11 @@ class AnswerSerializer(serializers.ModelSerializer):
     def get_upvotes(self, answer: Answer) -> int:
         upvotes_count = getattr(answer, "upvotes_count", None)
         return upvotes_count if upvotes_count is not None else answer.upvotes.count()
+
+
+class ProfileAnswerSerializer(AnswerSerializer):
+    question_title = serializers.CharField(source="question.title", read_only=True)
+    question_slug = serializers.CharField(source="question.slug", read_only=True)
+
+    class Meta(AnswerSerializer.Meta):
+        fields = AnswerSerializer.Meta.fields + ("question_title", "question_slug")

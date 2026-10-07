@@ -7,10 +7,12 @@ import ProfileResources from '../components/profile/ProfileResources'
 import { Achievements, RecentAnswers, RecentQuestions } from '../components/profile/ProfileSidebar'
 import { getApiErrorMessage } from '../api/errors'
 import { getCurrentProfile, updateProfile } from '../api/profile'
+import { useAuth } from '../auth/useAuth'
 
 const tabs = ['Resources', 'Questions', 'Answers', 'Saved Resources']
 
 function StudentProfile() {
+  const { user: currentUser } = useAuth()
   const [activeTab, setActiveTab] = useState('Resources')
   const [profileState, setProfileState] = useState({ status: 'loading', data: null, error: null })
   const [reloadKey, setReloadKey] = useState(0)
@@ -19,7 +21,9 @@ function StudentProfile() {
   useEffect(() => {
     let isActive = true
 
-    getCurrentProfile().then(
+    if (!currentUser) return undefined
+
+    getCurrentProfile(currentUser).then(
       (data) => {
         if (isActive) setProfileState({ status: 'success', data, error: null })
       },
@@ -29,7 +33,7 @@ function StudentProfile() {
     )
 
     return () => { isActive = false }
-  }, [reloadKey])
+  }, [currentUser, reloadKey])
 
   const updateAvatar = async (avatarInput) => {
     if (!profileState.data?.user?.username) return
@@ -83,7 +87,25 @@ function StudentProfile() {
         ? <RecentAnswers answers={profile.recentAnswers} />
         : <ProfileResources resources={profile.savedResources} title="Saved resources" empty="No saved resources yet." />
 
-  return <><ProfileHeader user={user} profile={profile} editable avatarBusy={avatarState.status === 'loading'} avatarError={avatarState.error} onAvatarFile={updateAvatar} onAvatarUrl={updateAvatar} action={<Button to="/profile/edit" variant="secondary" className="min-h-9 px-4 text-sm">Edit Profile</Button>} /><main className="mx-auto min-h-[calc(100svh-26rem)] w-full max-w-[1260px] px-5 py-7 sm:px-8 lg:px-10"><div className="overflow-x-auto border-b border-[var(--color-border)]"><div className="flex min-w-max justify-between gap-7" role="tablist" aria-label="Profile content">{tabs.map((tab) => <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`min-h-12 border-b-[3px] px-2 text-sm font-semibold ${activeTab === tab ? 'border-[#55b7ee] text-[#55b7ee]' : 'border-transparent text-[var(--color-text)] hover:text-white'}`}>{tab}</button>)}</div></div><div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]"><section>{tabContent}</section><aside className="space-y-6"><Achievements achievements={profile.achievements} /><RecentQuestions questions={profile.recentQuestions} /></aside></div></main><Footer /></>
+  return <><ProfileHeader user={user} profile={profile} editable avatarBusy={avatarState.status === 'loading'} avatarError={avatarState.error} onAvatarFile={updateAvatar} onAvatarUrl={updateAvatar} action={<Button to="/profile/edit" variant="secondary" className="min-h-9 px-4 text-sm">Edit Profile</Button>} /><main className="mx-auto min-h-[calc(100svh-26rem)] w-full max-w-[1260px] px-5 py-7 sm:px-8 lg:px-10"><ProfileDetails profile={profile} /><div className="mt-7 overflow-x-auto border-b border-[var(--color-border)]"><div className="flex min-w-max justify-between gap-7" role="tablist" aria-label="Profile content">{tabs.map((tab) => <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`min-h-12 border-b-[3px] px-2 text-sm font-semibold ${activeTab === tab ? 'border-[#55b7ee] text-[#55b7ee]' : 'border-transparent text-[var(--color-text)] hover:text-white'}`}>{tab}</button>)}</div></div><div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]"><section>{tabContent}</section><aside className="space-y-6"><Achievements achievements={profile.achievements} /><RecentQuestions questions={profile.recentQuestions} /></aside></div></main><Footer /></>
+}
+
+function ProfileDetails({ profile }) {
+  const background = profile.customBackground || profile.educationBackground?.name
+  const course = profile.customCourse || profile.course?.name
+  const stage = profile.academicLevel?.name || profile.academicLevelValue
+  const location = [profile.city, profile.state, profile.country].filter(Boolean).join(', ')
+  const details = [
+    ['Location', location],
+    ['Educational background', background],
+    ['Course / program', course],
+    ['Academic level / stage', stage],
+  ].filter(([, value]) => value)
+
+  if (!details.length) return null
+  return <section className="grid gap-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:grid-cols-2 sm:p-6" aria-label="Education and location">
+    {details.map(([label, value]) => <div key={label}><p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text)]">{label}</p><p className="mt-1 text-sm font-semibold text-white">{value}</p></div>)}
+  </section>
 }
 
 function ProfilePageState({ title, message, action = null, loadingLabel = '' }) {

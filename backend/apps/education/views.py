@@ -104,6 +104,12 @@ class CourseViewSet(ReadOnlyModelViewSet):
                 OpenApiParameter.QUERY,
                 description="Course ID, slug, or name.",
             ),
+            OpenApiParameter(
+                "background",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Optional education background ID, slug, or name.",
+            ),
         ],
         responses=AcademicLevelSerializer(many=True),
     ),
@@ -125,6 +131,7 @@ class AcademicLevelViewSet(ReadOnlyModelViewSet):
             course__education_background__is_active=True,
         )
         course = self.request.query_params.get("course")
+        background = self.request.query_params.get("background")
         if course is not None:
             course_id = _resolve_catalog_id(
                 Course,
@@ -137,6 +144,15 @@ class AcademicLevelViewSet(ReadOnlyModelViewSet):
             if course_id is None:
                 return queryset.none()
             queryset = queryset.filter(course_id=course_id)
+        if background is not None:
+            background_id = _resolve_catalog_id(
+                EducationBackground,
+                background,
+                active_filters={"is_active": True},
+            )
+            if background_id is None:
+                return queryset.none()
+            queryset = queryset.filter(course__education_background_id=background_id)
         return queryset
 
 

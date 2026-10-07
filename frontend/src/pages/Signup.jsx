@@ -7,17 +7,15 @@ import AuthDivider from '../components/auth/AuthDivider'
 import AuthInput from '../components/auth/AuthInput'
 import AuthLayout from '../components/auth/AuthLayout'
 import GoogleAuthButton from '../components/auth/GoogleAuthButton'
-import InterestSelector from '../components/auth/InterestSelector'
 import PasswordInput from '../components/auth/PasswordInput'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const initialForm = { name: '', email: '', password: '', college: '', course: '', semester: '5th Semester' }
+const initialForm = { name: '', email: '', password: '', college: '', country: '', state: '', city: '' }
 
 function Signup() {
   const navigate = useNavigate()
   const { signIn, signUp } = useAuth()
   const [form, setForm] = useState(initialForm)
-  const [interests, setInterests] = useState(['Java', 'DSA', 'Web Development'])
   const [errors, setErrors] = useState({})
   const [notice, setNotice] = useState('')
   const [noticeIsError, setNoticeIsError] = useState(false)
@@ -31,10 +29,6 @@ function Signup() {
     setNoticeIsError(false)
   }
 
-  const toggleInterest = (interest) => {
-    setInterests((current) => current.includes(interest) ? current.filter((item) => item !== interest) : [...current, interest])
-  }
-
   const handleSignup = async (event) => {
     event.preventDefault()
     const nextErrors = {}
@@ -43,8 +37,9 @@ function Signup() {
     else if (!emailPattern.test(form.email)) nextErrors.email = 'Please enter a valid email address.'
     if (!form.password) nextErrors.password = 'This field is required.'
     if (!form.college.trim()) nextErrors.college = 'This field is required.'
-    if (!form.course.trim()) nextErrors.course = 'This field is required.'
-    if (!form.semester) nextErrors.semester = 'Please choose a semester.'
+    if (!form.country.trim()) nextErrors.country = 'This field is required.'
+    if (!form.state.trim()) nextErrors.state = 'This field is required.'
+    if (!form.city.trim()) nextErrors.city = 'This field is required.'
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length) return
 
@@ -57,8 +52,9 @@ function Signup() {
         email: credentials.email,
         password: form.password,
         college: form.college.trim(),
-        course: form.course.trim(),
-        semester: form.semester,
+        country: form.country.trim(),
+        state: form.state.trim(),
+        city: form.city.trim(),
       })
       const result = await signIn(credentials)
       navigate(result.user?.profile?.onboarding_completed ? '/home' : '/onboarding', { replace: true })
@@ -83,19 +79,12 @@ function Signup() {
           <AuthInput id="signup-name" name="name" label="Full Name" icon={UserRound} placeholder="Rahul Sharma" autoComplete="name" value={form.name} onChange={update} error={errors.name} />
           <AuthInput id="signup-email" name="email" label="Email Address" icon={Mail} type="email" placeholder="rahul@example.com" autoComplete="email" value={form.email} onChange={update} error={errors.email} />
           <PasswordInput id="signup-password" name="password" placeholder="Create a password" autoComplete="new-password" value={form.password} onChange={update} error={errors.password} />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <AuthInput id="signup-college" name="college" label="College / University" placeholder="IIT Delhi" value={form.college} onChange={update} error={errors.college} />
-            <AuthInput id="signup-course" name="course" label="Course" placeholder="BTech" value={form.course} onChange={update} error={errors.course} />
+          <AuthInput id="signup-college" name="college" label="College / University" placeholder="IIT Delhi" value={form.college} onChange={update} error={errors.college} />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <AuthInput id="signup-country" name="country" label="Country" placeholder="India" value={form.country} onChange={update} error={errors.country} />
+            <AuthInput id="signup-state" name="state" label="State" placeholder="Delhi" value={form.state} onChange={update} error={errors.state} />
+            <AuthInput id="signup-city" name="city" label="City" placeholder="New Delhi" value={form.city} onChange={update} error={errors.city} />
           </div>
-          <div>
-            <label htmlFor="signup-semester" className="mb-1 block text-sm font-medium text-[var(--color-text)]">Semester</label>
-            <select id="signup-semester" name="semester" value={form.semester} onChange={update} className={`auth-control appearance-auto ${errors.semester ? 'border-red-300 focus:border-red-300' : ''}`} aria-invalid={errors.semester ? 'true' : undefined} aria-describedby={errors.semester ? 'signup-semester-error' : undefined}>
-              <option value="" disabled>Select your semester</option>
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((semester) => <option key={semester} value={`${semester}th Semester`}>{semester === 1 ? '1st' : semester === 2 ? '2nd' : semester === 3 ? '3rd' : `${semester}th`} Semester</option>)}
-            </select>
-            {errors.semester ? <p id="signup-semester-error" className="mt-1 text-xs font-normal text-red-200">{errors.semester}</p> : null}
-          </div>
-          <InterestSelector selected={interests} onChange={toggleInterest} />
           <button type="submit" disabled={isSubmitting} className="min-h-11 w-full bg-[var(--color-primary)] px-4 text-base font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)] disabled:cursor-not-allowed disabled:opacity-60">{isSubmitting ? 'Creating account…' : 'Create Account'}</button>
           {notice ? <p role={noticeIsError ? 'alert' : 'status'} className={noticeIsError ? 'border border-red-300 bg-red-950/40 px-3 py-2 text-center text-xs font-normal leading-5 text-red-100' : 'border border-[var(--color-primary-light)] bg-[var(--color-primary-soft)] px-3 py-2 text-center text-xs font-normal leading-5 text-slate-100'}>{notice}</p> : null}
           <AuthDivider />

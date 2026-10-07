@@ -4,7 +4,7 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers
-from rest_framework.generics import CreateAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView
+from rest_framework.generics import CreateAPIView, ListAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.mixins import CreateModelMixin, DestroyModelMixin, ListModelMixin, RetrieveModelMixin, UpdateModelMixin
 from rest_framework.permissions import SAFE_METHODS, AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -20,7 +20,7 @@ from apps.notifications.models import Notification
 from apps.notifications.services import create_notification
 
 from .models import Answer, Question
-from .serializers import AnswerSerializer, QuestionSerializer
+from .serializers import AnswerSerializer, ProfileAnswerSerializer, QuestionSerializer
 
 
 QUESTION_UPVOTE_RESPONSE = inline_serializer(
@@ -119,13 +119,25 @@ class QuestionViewSet(
         return super().get_throttles()
 
     def get_queryset(self):
-        queryset = Question.objects.select_related("author", "academic_level").prefetch_related("tags")
+        queryset = Question.objects.select_related("author", "academic_level").prefetch_related("tags").annotate(
+            upvotes_count=Count("upvotes", distinct=True),
+            answers_count=Count("answers", distinct=True),
+        )
         if self.request.user.is_authenticated:
             return queryset.filter(Q(status=PublicationStatus.PUBLISHED) | Q(author=self.request.user))
         return queryset.filter(status=PublicationStatus.PUBLISHED)
 
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
+        author = self.request.query_params.get("author")
+        if author is not None:
+            try:
+                author_id = int(author)
+            except (TypeError, ValueError):
+                return queryset.none()
+            if author_id < 1:
+                return queryset.none()
+            queryset = queryset.filter(author_id=author_id)
         search = self.request.query_params.get("search", "").strip()
         if search:
             queryset = queryset.filter(
@@ -144,6 +156,28 @@ class QuestionViewSet(
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
+
+
+@extend_schema(
+    operation_id="profile_answers_list",
+    summary="List the authenticated user's answers",
+    responses=ProfileAnswerSerializer(many=True),
+)
+class ProfileAnswerListView(ListAPIView):
+    """Return one bounded, ownership-scoped answer feed for the profile page."""
+
+    serializer_class = ProfileAnswerSerializer
+    permission_classes = (IsAuthenticated,)
+
+    def get_queryset(self):
+        return Answer.objects.select_related("question", "author").annotate(
+            upvotes_count=Count("upvotes")
+        ).filter(
+            author=self.request.user,
+        ).filter(
+            Q(question__status=PublicationStatus.PUBLISHED) | Q(question__author=self.request.user),
+            Q(status=PublicationStatus.PUBLISHED) | Q(author=self.request.user),
+        ).order_by("-created_at", "-pk")
 
 
 @extend_schema_view(

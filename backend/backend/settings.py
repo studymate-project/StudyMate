@@ -346,8 +346,14 @@ SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=not DEBUG)
 SESSION_COOKIE_SAMESITE = env('SESSION_COOKIE_SAMESITE', default=JWT_COOKIE_SAMESITE)
 CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=not DEBUG)
 CSRF_COOKIE_SAMESITE = env('CSRF_COOKIE_SAMESITE', default=JWT_COOKIE_SAMESITE)
+CSRF_COOKIE_NAME = env('CSRF_COOKIE_NAME', default='csrftoken')
+CSRF_COOKIE_PATH = env('CSRF_COOKIE_PATH', default='/')
+CSRF_COOKIE_DOMAIN = env('CSRF_COOKIE_DOMAIN', default=None)
 CSRF_COOKIE_HTTPONLY = False
 CSRF_FAILURE_VIEW = 'apps.core.error_handlers.api_csrf_failure'
+
+if CSRF_COOKIE_SAMESITE not in {'Lax', 'Strict', 'None'}:
+    raise ImproperlyConfigured('CSRF_COOKIE_SAMESITE must be Lax, Strict, or None.')
 
 # Explicit response-header defaults protect production while remaining harmless
 # for local HTTP development. Each value can be changed through the environment.

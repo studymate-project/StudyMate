@@ -1,5 +1,7 @@
 from django.conf import settings
 from django.middleware.csrf import get_token
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import api_view, permission_classes
@@ -88,7 +90,7 @@ def enforce_cookie_csrf(request):
 @extend_schema_view(
     post=extend_schema(
         summary="Create an account",
-        description="Create a user and initial profile. Email, password, college, course, and semester are required; college is stored as profile text while course and semester are resolved from the education catalog.",
+        description="Create a user and initial profile with identity and optional location data. Education selections are completed during onboarding.",
         request=RegistrationSerializer,
         responses={201: REGISTRATION_RESPONSE, 400: BAD_REQUEST},
     )
@@ -105,6 +107,7 @@ class SignupView(CreateAPIView):
         return super().post(request, *args, **kwargs)
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class CsrfTokenView(APIView):
     """Issue Django's CSRF cookie and token for browser API clients."""
 

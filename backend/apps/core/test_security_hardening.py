@@ -1,8 +1,8 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
-from apps.education.models import Interest, StudentInterest
+from apps.education.models import AcademicLevel, Course, EducationBackground, Interest, StudentInterest
 from apps.users.models import StudentProfile
 
 
@@ -85,3 +85,103 @@ class AuthenticationCSRFTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 403)
+
+    @override_settings(
+        CORS_ALLOWED_ORIGINS=["https://studymate.vercel.app"],
+        CSRF_TRUSTED_ORIGINS=["https://studymate.vercel.app"],
+        CSRF_COOKIE_SECURE=True,
+        CSRF_COOKIE_SAMESITE="None",
+        JWT_COOKIE_SECURE=True,
+        JWT_COOKIE_SAMESITE="None",
+        SESSION_COOKIE_SECURE=True,
+    )
+    def test_cross_origin_browser_flow_bootstraps_csrf_for_account_and_profile_mutations(self):
+        origin = "https://studymate.vercel.app"
+        bootstrap = self.client.get("/api/auth/csrf/", HTTP_ORIGIN=origin)
+
+        self.assertEqual(bootstrap.status_code, 200)
+        self.assertEqual(bootstrap["Access-Control-Allow-Origin"], origin)
+        self.assertEqual(bootstrap["Access-Control-Allow-Credentials"], "true")
+        self.assertTrue(bootstrap.data["csrf_token"])
+        csrf_cookie = bootstrap.cookies["csrftoken"]
+        self.assertEqual(csrf_cookie["samesite"], "None")
+        self.assertTrue(csrf_cookie["secure"])
+        self.assertEqual(csrf_cookie["path"], "/")
+
+        csrf_token = bootstrap.data["csrf_token"]
+        signup = self.client.post(
+            "/api/auth/signup/",
+            {
+                "name": "Cross Origin Student",
+                "email": "cross-origin-student@example.com",
+                "password": "A-strong-cross-origin-password-42!",
+                "country": "India",
+                "state": "Delhi",
+                "city": "New Delhi",
+            },
+            format="json",
+            HTTP_ORIGIN=origin,
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        self.assertEqual(signup.status_code, 201, signup.data)
+        username = signup.data["user"]["username"]
+
+        login = self.client.post(
+            "/api/auth/login/",
+            {"email": "cross-origin-student@example.com", "password": "A-strong-cross-origin-password-42!"},
+            format="json",
+            HTTP_ORIGIN=origin,
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        self.assertEqual(login.status_code, 200, login.data)
+
+        background = EducationBackground.objects.get(slug="engineering")
+        course = Course.objects.get(education_background=background, slug="btech")
+        level = AcademicLevel.objects.filter(course=course).order_by("order").first()
+        onboarding = self.client.post(
+            "/api/users/onboarding/",
+            {
+                "education_background": background.pk,
+                "course": course.pk,
+                "academic_level": level.pk,
+                "country": "India",
+                "state": "Delhi",
+                "city": "New Delhi",
+            },
+            format="json",
+            HTTP_ORIGIN=origin,
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        self.assertEqual(onboarding.status_code, 200, onboarding.data)
+
+        profile_update = self.client.patch(
+            f"/api/users/{username}/",
+            {"city": "Pune"},
+            format="json",
+            HTTP_ORIGIN=origin,
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        self.assertEqual(profile_update.status_code, 200, profile_update.data)
+
+        logout = self.client.post(
+            "/api/auth/logout/",
+            {},
+            format="json",
+            HTTP_ORIGIN=origin,
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        self.assertEqual(logout.status_code, 204)
+        self.assertEqual(
+            self.client.get("/api/auth/me/", HTTP_ORIGIN=origin).status_code,
+            401,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/api/auth/refresh/",
+                {},
+                format="json",
+                HTTP_ORIGIN=origin,
+                HTTP_X_CSRFTOKEN=csrf_token,
+            ).status_code,
+            401,
+        )

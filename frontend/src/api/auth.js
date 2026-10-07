@@ -1,12 +1,19 @@
 import { apiClient } from './client'
+import { clearNotificationCache } from './notifications'
+import { clearQuestionListCache } from './questions'
+import { clearResourceListCache } from './resources'
 
 let sessionRestoreRequest
+let currentUserRequest
 
 function getUser(data) {
   return data?.user || null
 }
 
 export async function login(credentials) {
+  clearResourceListCache()
+  clearQuestionListCache()
+  clearNotificationCache()
   const response = await apiClient.post('/auth/login/', credentials)
   return { ...response.data, user: getUser(response.data) }
 }
@@ -17,8 +24,16 @@ export async function signup(payload) {
 }
 
 export async function getCurrentUser(config) {
-  const response = await apiClient.get('/auth/me/', config)
-  return getUser(response.data)
+  if (currentUserRequest) return currentUserRequest
+
+  const requestConfig = { ...config }
+  currentUserRequest = apiClient.get('/auth/me/', requestConfig).then((response) => {
+    return getUser(response.data)
+  }).finally(() => {
+    currentUserRequest = undefined
+  })
+
+  return currentUserRequest
 }
 
 export async function refreshSession() {
@@ -60,5 +75,8 @@ export function restoreSession() {
 
 export async function logout() {
   const response = await apiClient.post('/auth/logout/')
+  clearResourceListCache()
+  clearQuestionListCache()
+  clearNotificationCache()
   return response.data
 }

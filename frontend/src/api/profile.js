@@ -1,9 +1,12 @@
 import { getCurrentUser } from './auth'
 import { apiClient } from './client'
+import { listAcademicLevels, listCourses, listEducationBackgrounds } from './onboarding'
 import { listResources, listSavedResources } from './resources'
-import { listAnswers, listQuestions } from './questions'
+import { listAnswersByAuthor, listQuestions } from './questions'
 
 let currentProfileRequest
+const currentProfileCache = new Map()
+const CURRENT_PROFILE_CACHE_TTL_MS = 30 * 1000
 
 function getDisplayName(user, profile) {
   return profile.display_name?.trim()
@@ -35,9 +38,41 @@ function normalizeStats(contributionPoints, activity) {
   return stats
 }
 
-export function normalizeProfileResponse(data, activity = {}) {
+function sameId(first, second) {
+  return String(first) === String(second)
+}
+
+async function getEducationSelection(profile = {}) {
+  if (!profile.education_background) {
+    return { background: null, course: null, academicLevel: null }
+  }
+
+  const backgrounds = await listEducationBackgrounds()
+  const background = backgrounds.find((item) => sameId(item.id, profile.education_background)) || null
+  if (!background || !profile.course) {
+    return { background, course: null, academicLevel: null }
+  }
+
+  const courses = await listCourses(background.id)
+  const course = courses.find((item) => sameId(item.id, profile.course)) || null
+  if (!course || !profile.academic_level) {
+    return { background, course, academicLevel: null }
+  }
+
+  const levels = await listAcademicLevels(course.id, background.id)
+  return {
+    background,
+    course,
+    academicLevel: levels.find((item) => sameId(item.id, profile.academic_level)) || null,
+  }
+}
+
+export function normalizeProfileResponse(data, activity = {}, education = {}) {
   const user = data?.user || {}
   const profile = user.profile || {}
+  const background = education.background || null
+  const course = education.course || null
+  const academicLevel = education.academicLevel || null
   const name = getDisplayName(user, profile)
   const normalizedActivity = {
     resources: activity.resources || [],
@@ -52,12 +87,11 @@ export function normalizeProfileResponse(data, activity = {}) {
       username: user.username,
       name,
       avatarUrl: profile.avatar_url || null,
-      // The current API returns foreign-key IDs without catalog details.
       educationBackgroundId: profile.education_background ?? null,
       courseId: profile.course ?? null,
       academicLevelId: profile.academic_level ?? null,
-      course: null,
-      semester: null,
+      course: course?.name || profile.custom_course || null,
+      semester: academicLevel?.name || profile.academic_level_value || null,
     },
     profile: {
       initials: getInitials(name),
@@ -65,11 +99,21 @@ export function normalizeProfileResponse(data, activity = {}) {
       bio: profile.bio || '',
       avatarUrl: profile.avatar_url || '',
       college: profile.college || '',
+      country: profile.country || '',
+      state: profile.state || '',
+      city: profile.city || '',
+      educationBackground: background,
       educationBackgroundId: profile.education_background ?? null,
+      customBackground: profile.custom_background || '',
+      course,
       courseId: profile.course ?? null,
+      customCourse: profile.custom_course || '',
+      academicLevel,
       academicLevelId: profile.academic_level ?? null,
+      academicLevelType: profile.academic_level_type || academicLevel?.level_type || '',
+      academicLevelValue: profile.academic_level_value || academicLevel?.name || '',
       tags: [],
-      interests: [],
+      interests: profile.interests || [],
       stats: normalizeStats(profile.contribution_points, normalizedActivity),
       achievements: [],
       resources: normalizedActivity.resources,
@@ -87,35 +131,31 @@ export function normalizeProfileResponse(data, activity = {}) {
   }
 }
 
-export async function getCurrentProfile() {
+export async function getCurrentProfile(userOverride = null) {
+  const knownUser = userOverride || null
+  const cacheKey = knownUser?.id ? String(knownUser.id) : null
+  const cached = cacheKey ? currentProfileCache.get(cacheKey) : null
+  if (cached && cached.expiresAt > Date.now()) return cached.data
   if (currentProfileRequest) return currentProfileRequest
 
-  currentProfileRequest = getCurrentUser().then(async (user) => {
-    const [resourceResult, questionResult, savedResult] = await Promise.all([
-      listResources({ page_size: 100 }),
-      listQuestions({ page_size: 100 }),
+  currentProfileRequest = Promise.resolve(userOverride || getCurrentUser()).then(async (user) => {
+    const [education, resourceResult, questionResult, savedResult] = await Promise.all([
+      getEducationSelection(user.profile),
+      listResources({ uploader: user.id, page_size: 20 }),
+      listQuestions({ author: user.id, page_size: 20 }),
       listSavedResources(),
     ])
     const resources = resourceResult.resources.filter((resource) => resource.authorId === user.id)
     const questions = questionResult.questions.filter((question) => question.author?.id === user.id)
-    const answerRequests = questionResult.questions
-      .filter((question) => question.answerCount > 0)
-      .map((question) => listAnswers(question.id).then(({ answers }) => answers
-        .filter((answer) => answer.author?.id === user.id)
-        .map((answer) => ({
-          ...answer,
-          questionTitle: question.title,
-          questionSlug: question.slug,
-        }))))
-    const answerResults = await Promise.allSettled(answerRequests)
-    const answers = answerResults
-      .filter((result) => result.status === 'fulfilled')
-      .flatMap((result) => result.value)
+    const { answers } = await listAnswersByAuthor()
 
-    return normalizeProfileResponse(
+    const data = normalizeProfileResponse(
       { user },
       { resources, questions, answers, savedResources: savedResult.resources },
+      education,
     )
+    currentProfileCache.set(String(user.id), { data, expiresAt: Date.now() + CURRENT_PROFILE_CACHE_TTL_MS })
+    return data
   })
 
   currentProfileRequest.then(
@@ -132,7 +172,7 @@ export function getPublicProfile(username) {
 
   return apiClient
     .get(`/users/${encodeURIComponent(normalizedUsername)}/`)
-    .then((response) => {
+    .then(async (response) => {
       const data = response.data || {}
       // Public profile responses are returned as StudentProfile records. Keep
       // this tolerant of the wrapped shape used by auth responses as well so
@@ -144,6 +184,7 @@ export function getPublicProfile(username) {
         || user.username
         || 'StudyMate member'
 
+      const education = await getEducationSelection(profileData)
       return {
         user: {
           id: user.id,
@@ -151,12 +192,25 @@ export function getPublicProfile(username) {
           name,
           avatarUrl: profileData.avatar_url || null,
           isFollowing: Boolean(profileData.is_following),
-          course: null,
-          semester: null,
+          course: education.course?.name || profileData.custom_course || null,
+          semester: education.academicLevel?.name || profileData.academic_level_value || null,
         },
         profile: {
           bio: profileData.bio || '',
           college: profileData.college || '',
+          country: profileData.country || '',
+          state: profileData.state || '',
+          city: profileData.city || '',
+          educationBackground: education.background,
+          educationBackgroundId: profileData.education_background ?? null,
+          customBackground: profileData.custom_background || '',
+          course: education.course,
+          courseId: profileData.course ?? null,
+          customCourse: profileData.custom_course || '',
+          academicLevel: education.academicLevel,
+          academicLevelId: profileData.academic_level ?? null,
+          academicLevelType: profileData.academic_level_type || education.academicLevel?.level_type || '',
+          academicLevelValue: profileData.academic_level_value || education.academicLevel?.name || '',
           contributionPoints: profileData.contribution_points ?? 0,
           isFollowing: Boolean(profileData.is_following),
         },
@@ -167,7 +221,10 @@ export function getPublicProfile(username) {
 export function updateProfile(username, payload) {
   return apiClient
     .patch(`/users/${encodeURIComponent(username)}/`, payload)
-    .then((response) => response.data)
+    .then((response) => {
+      currentProfileCache.clear()
+      return response.data
+    })
 }
 
 export function followProfile(username) {

@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
+from django.db.models import Exists, OuterRef, Prefetch
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from rest_framework.permissions import IsAuthenticated
@@ -12,6 +13,7 @@ from rest_framework.mixins import UpdateModelMixin
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from apps.core.permissions import IsProfileOwnerOrReadOnly
+from apps.education.models import StudentInterest
 from apps.education.serializers import StudentInterestSerializer
 from apps.core.schema import BAD_REQUEST, NOT_FOUND, UNAUTHENTICATED
 
@@ -35,13 +37,15 @@ class OnboardingView(APIView):
 
     @extend_schema(
         summary="Submit onboarding choices",
-        description="Persist an authenticated user's required background, course, academic level, and course-compatible interests atomically. Ownership and onboarding_completed are server-controlled.",
+        description="Persist an authenticated user's background, course, academic level, location, and optional course-compatible interests atomically. Ownership and onboarding_completed are server-controlled.",
         request=OnboardingSerializer,
         responses={200: ONBOARDING_RESPONSE, 400: BAD_REQUEST, 401: UNAUTHENTICATED},
     )
     def post(self, request):
         profile = StudentProfile.objects.select_related(
             "user", "education_background", "course", "academic_level"
+        ).prefetch_related(
+            Prefetch("student_interests", queryset=StudentInterest.objects.select_related("interest"))
         ).filter(user=request.user).first()
         serializer = OnboardingSerializer(
             instance=profile,
@@ -79,7 +83,22 @@ class StudentProfileViewSet(UpdateModelMixin, ReadOnlyModelViewSet):
     lookup_url_kwarg = "identifier"
     queryset = StudentProfile.objects.select_related(
         "user", "education_background", "course", "academic_level"
+    ).prefetch_related(
+        Prefetch("student_interests", queryset=StudentInterest.objects.select_related("interest"))
     ).order_by("pk")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.request.user.is_authenticated:
+            queryset = queryset.annotate(
+                _is_following=Exists(
+                    UserFollow.objects.filter(
+                        follower=self.request.user,
+                        following_id=OuterRef("user_id"),
+                    )
+                )
+            )
+        return queryset
 
     def get_object(self) -> StudentProfile:
         identifier = self.kwargs[self.lookup_url_kwarg]

@@ -88,6 +88,8 @@ class ResourceSerializer(serializers.ModelSerializer):
         return self._count(instance, "_upvote_count", "upvotes")
 
     def get_is_saved(self, instance):
+        if hasattr(instance, "_is_saved"):
+            return bool(instance._is_saved)
         request = self.context.get("request")
         return bool(
             request

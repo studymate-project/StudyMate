@@ -2,9 +2,10 @@ export { apiClient, readCookie } from './client'
 export { API_BASE_URL } from './config'
 export { ApiError, getApiErrorMessage, getApiFieldErrors } from './errors'
 export { getCurrentUser, login, logout, refreshSession, restoreSession, signup } from './auth'
-export { listAcademicLevels, listCourses, listEducationBackgrounds, listInterests, submitOnboarding } from './onboarding'
+export { ACADEMIC_STAGE_TYPES, clearEducationCatalogCache, listAcademicLevels, listCourses, listEducationBackgrounds, listInterests, submitOnboarding } from './onboarding'
 export {
   createResource,
+  clearResourceListCache,
   getResourceBySlug,
   listResources,
   listSavedResources,
@@ -24,17 +25,20 @@ export {
   updateProfile,
 } from './profile'
 export {
+  clearNotificationCache,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
   normalizeNotification,
 } from './notifications'
 export {
+  clearQuestionListCache,
   createAnswer,
   createQuestion,
   getQuestionBySlug,
   listQuestions,
   listAnswers,
+  listAnswersByAuthor,
   normalizeAnswer,
   normalizeQuestion,
   removeAnswerUpvote,

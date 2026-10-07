@@ -251,7 +251,9 @@ class DomainModelTests(TestCase):
         cls.user = User.objects.create_user(username="student", password="not-used-in-test")
         cls.other_user = User.objects.create_user(username="peer", password="not-used-in-test")
         cls.background = EducationBackground.objects.create(name="Engineering", slug="domain-engineering")
-        cls.other_background = EducationBackground.objects.create(name="School", slug="school")
+        cls.other_background, _ = EducationBackground.objects.get_or_create(
+            slug="school", defaults={"name": "School"}
+        )
         cls.course = Course.objects.create(education_background=cls.background, name="B.Tech", slug="btech")
         cls.other_course = Course.objects.create(education_background=cls.other_background, name="Class 12", slug="class-12")
         cls.level = AcademicLevel.objects.create(
@@ -876,9 +878,9 @@ class SerializerTests(TestCase):
         self.assertNotEqual(user.password, "A-strong-registration-password-42!")
         self.assertEqual(user.email, "new.student@example.com")
         self.assertEqual(user.username, "newstudent")
-        self.assertEqual(profile.education_background, self.background)
-        self.assertEqual(profile.course, self.course)
-        self.assertEqual(profile.academic_level, self.level)
+        self.assertIsNone(profile.education_background)
+        self.assertIsNone(profile.course)
+        self.assertIsNone(profile.academic_level)
         self.assertFalse(user.is_staff)
         self.assertEqual(profile.contribution_points, 0)
 
@@ -921,7 +923,7 @@ class SerializerTests(TestCase):
         self.assertFalse(weak.is_valid())
         self.assertIn("password", weak.errors)
 
-    def test_registration_accepts_a_free_text_college_and_rejects_unknown_course(self):
+    def test_registration_accepts_location_and_ignores_legacy_education_fields(self):
         serializer = RegistrationSerializer(
             data={
                 "name": "Unknown Education",
@@ -933,9 +935,10 @@ class SerializerTests(TestCase):
             }
         )
 
-        self.assertFalse(serializer.is_valid())
-        self.assertIn("course", serializer.errors)
-        self.assertFalse(User.objects.filter(email="unknown.education@example.com").exists())
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        user = serializer.save()
+        self.assertEqual(user.student_profile.college, "IIT Delhi")
+        self.assertIsNone(user.student_profile.course)
 
     def test_registration_persists_a_free_text_college(self):
         serializer = RegistrationSerializer(
@@ -953,7 +956,7 @@ class SerializerTests(TestCase):
         user = serializer.save()
 
         self.assertEqual(user.student_profile.college, "IIT Delhi")
-        self.assertEqual(user.student_profile.education_background, self.background)
+        self.assertIsNone(user.student_profile.education_background)
 
 
 class APIViewTests(TestCase):
@@ -1163,7 +1166,9 @@ class APIViewTests(TestCase):
         self.client.force_authenticate(user=self.user)
 
         for name, slug in category_specs:
-            background = EducationBackground.objects.create(name=name, slug=slug)
+            background, _ = EducationBackground.objects.get_or_create(
+                slug=slug, defaults={"name": name}
+            )
             course = Course.objects.create(
                 education_background=background,
                 name=f"{name} Program",
@@ -1199,12 +1204,17 @@ class APIViewTests(TestCase):
                         "course": course.pk,
                         "academic_level": level.pk,
                         "interests": [interest.pk],
+                        **(
+                            {"custom_background": "Custom Other Background"}
+                            if name == "Other"
+                            else {}
+                        ),
                     },
                     format="json",
                 )
 
-                self.assertEqual(
-                    [item["id"] for item in course_response.data["results"]], [course.pk]
+                self.assertIn(
+                    course.pk, [item["id"] for item in course_response.data["results"]]
                 )
                 self.assertEqual(
                     [item["id"] for item in level_response.data["results"]], [level.pk]
@@ -1257,7 +1267,7 @@ class APIViewTests(TestCase):
     def test_onboarding_rejects_missing_required_fields(self):
         self.client.force_authenticate(user=self.user)
 
-        for field in ("education_background", "course", "academic_level", "interests"):
+        for field in ("education_background", "course", "academic_level"):
             with self.subTest(field=field):
                 payload = self.onboarding_payload()
                 payload.pop(field)
@@ -1310,7 +1320,7 @@ class APIViewTests(TestCase):
             "/api/users/onboarding/", self.onboarding_payload(), format="json"
         )
         self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.data, {"detail": "Internal server error."})
+        self.assertEqual(response.data, {"detail": "Something went wrong. Please try again."})
 
         profile.refresh_from_db()
         self.assertEqual(
@@ -1967,6 +1977,9 @@ class APIViewTests(TestCase):
                 "email": "signup.student@example.com",
                 "password": "A-strong-signup-password-42!",
                 "college": self.background.name,
+                "country": "India",
+                "state": "Delhi",
+                "city": "New Delhi",
                 "course": self.course.name,
                 "semester": self.level.name,
                 "is_staff": True,
@@ -1978,6 +1991,9 @@ class APIViewTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["user"]["email"], "signup.student@example.com")
         self.assertEqual(response.data["profile"]["display_name"], "Signup Student")
+        self.assertEqual(response.data["profile"]["country"], "India")
+        self.assertEqual(response.data["profile"]["state"], "Delhi")
+        self.assertEqual(response.data["profile"]["city"], "New Delhi")
         self.assertNotIn("password", response.data)
         self.assertNotIn("access", response.data)
         self.assertNotIn("refresh", response.data)
@@ -1985,7 +2001,11 @@ class APIViewTests(TestCase):
         user = User.objects.get(email="signup.student@example.com")
         self.assertTrue(user.check_password("A-strong-signup-password-42!"))
         self.assertFalse(user.is_staff)
-        self.assertEqual(user.student_profile.course, self.course)
+        self.assertIsNone(user.student_profile.course)
+        self.assertEqual(
+            (user.student_profile.country, user.student_profile.state, user.student_profile.city),
+            ("India", "Delhi", "New Delhi"),
+        )
 
     def test_signup_rejects_duplicate_email_and_handles_username_collision(self):
         User.objects.create_user(
@@ -2023,7 +2043,7 @@ class APIViewTests(TestCase):
         self.assertEqual(collision.status_code, 201)
         self.assertEqual(collision.data["user"]["username"], "signupstudent-2")
 
-    def test_signup_rejects_invalid_password_education_and_malformed_input(self):
+    def test_signup_rejects_invalid_password_and_malformed_input(self):
         invalid_password = self.client.post(
             "/api/auth/signup/",
             {
@@ -2036,18 +2056,6 @@ class APIViewTests(TestCase):
             },
             format="json",
         )
-        invalid_education = self.client.post(
-            "/api/auth/signup/",
-            {
-                "name": "Invalid Education",
-                "email": "invalid.education@example.com",
-                "password": "A-strong-signup-password-42!",
-                "college": self.background.name,
-                "course": "Not a real course",
-                "semester": self.level.name,
-            },
-            format="json",
-        )
         malformed = self.client.post(
             "/api/auth/signup/",
             {"email": "malformed@example.com"},
@@ -2056,8 +2064,6 @@ class APIViewTests(TestCase):
 
         self.assertEqual(invalid_password.status_code, 400)
         self.assertIn("password", invalid_password.data)
-        self.assertEqual(invalid_education.status_code, 400)
-        self.assertIn("course", invalid_education.data)
         self.assertEqual(malformed.status_code, 400)
         self.assertIn("name", malformed.data)
 

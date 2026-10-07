@@ -1,27 +1,38 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import AppLayout from '../components/layout/AppLayout'
-import AskQuestion from '../pages/AskQuestion'
-import Community from '../pages/Community'
-import Explore from '../pages/Explore'
-import Home from '../pages/Home'
-import NotFound from '../pages/NotFound'
-import PdfReader from '../pages/PdfReader'
-import QuestionDetails from '../pages/QuestionDetails'
-import ResourceDetails from '../pages/ResourceDetails'
-import SavedResources from '../pages/SavedResources'
-import SearchResults from '../pages/SearchResults'
-import UserProfile from '../pages/UserProfile'
-import VideoDetails from '../pages/VideoDetails'
-import UploadResource from '../pages/UploadResource'
-import Notifications from '../pages/Notifications'
-import Dashboard from '../pages/Dashboard'
-import StudentProfile from '../pages/StudentProfile'
-import EditProfile from '../pages/EditProfile'
-import Login from '../pages/Login'
-import Signup from '../pages/Signup'
-import Onboarding from '../pages/Onboarding'
 import { AuthProvider } from '../auth/AuthContext'
 import { AuthGate, ProtectedRoute, PublicOnlyRoute } from '../auth/RouteGuards'
+import Spinner from '../components/common/Spinner'
+
+const AskQuestion = lazy(() => import('../pages/AskQuestion'))
+const Community = lazy(() => import('../pages/Community'))
+const Explore = lazy(() => import('../pages/Explore'))
+const Home = lazy(() => import('../pages/Home'))
+const NotFound = lazy(() => import('../pages/NotFound'))
+const PdfReader = lazy(() => import('../pages/PdfReader'))
+const QuestionDetails = lazy(() => import('../pages/QuestionDetails'))
+const ResourceDetails = lazy(() => import('../pages/ResourceDetails'))
+const SavedResources = lazy(() => import('../pages/SavedResources'))
+const SearchResults = lazy(() => import('../pages/SearchResults'))
+const UserProfile = lazy(() => import('../pages/UserProfile'))
+const VideoDetails = lazy(() => import('../pages/VideoDetails'))
+const UploadResource = lazy(() => import('../pages/UploadResource'))
+const Notifications = lazy(() => import('../pages/Notifications'))
+const Dashboard = lazy(() => import('../pages/Dashboard'))
+const StudentProfile = lazy(() => import('../pages/StudentProfile'))
+const EditProfile = lazy(() => import('../pages/EditProfile'))
+const Login = lazy(() => import('../pages/Login'))
+const Signup = lazy(() => import('../pages/Signup'))
+const Onboarding = lazy(() => import('../pages/Onboarding'))
+
+function LazyPage({ children }) {
+  return <Suspense fallback={<PageLoading />}>{children}</Suspense>
+}
+
+function PageLoading() {
+  return <div className="flex min-h-[calc(100svh-4rem)] items-center justify-center bg-[var(--color-bg)] px-4" role="status" aria-label="Loading page"><Spinner label="Loading page" /></div>
+}
 
 function AppRoutes() {
   return (
@@ -29,31 +40,31 @@ function AppRoutes() {
       <AuthProvider>
         <AuthGate>
           <Routes>
-            <Route path="login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
-            <Route path="signup" element={<PublicOnlyRoute><Signup /></PublicOnlyRoute>} />
-            <Route path="onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+            <Route path="login" element={<PublicOnlyRoute><LazyPage><Login /></LazyPage></PublicOnlyRoute>} />
+            <Route path="signup" element={<PublicOnlyRoute><LazyPage><Signup /></LazyPage></PublicOnlyRoute>} />
+            <Route path="onboarding" element={<ProtectedRoute><LazyPage><Onboarding /></LazyPage></ProtectedRoute>} />
             <Route element={<AppLayout />}>
-              <Route index element={<ProtectedRoute><Home /></ProtectedRoute>} />
-              <Route path="home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-              <Route path="explore" element={<Explore />} />
-              <Route path="resources/:slug/read" element={<PdfReader />} />
-              <Route path="resources/:slug" element={<ResourceDetails />} />
-              <Route path="videos/:slug" element={<VideoDetails />} />
-              <Route path="search" element={<SearchResults />} />
-              <Route path="saved" element={<ProtectedRoute><SavedResources /></ProtectedRoute>} />
-              <Route path="community" element={<Community />} />
-              <Route path="community/ask" element={<ProtectedRoute><AskQuestion /></ProtectedRoute>} />
-              <Route path="questions/:slug" element={<QuestionDetails />} />
-              <Route path="users/:username" element={<UserProfile />} />
-              <Route path="pdf/:slug" element={<PdfReader />} />
-              <Route path="upload" element={<ProtectedRoute><UploadResource /></ProtectedRoute>} />
-              <Route path="notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-              <Route path="dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-              <Route path="profile" element={<ProtectedRoute><StudentProfile /></ProtectedRoute>} />
-              <Route path="profile/edit" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
-              <Route path="profile/:username" element={<UserProfile />} />
-              <Route path="community/questions/:slug" element={<QuestionDetails />} />
-              <Route path="*" element={<NotFound />} />
+              <Route index element={<ProtectedRoute><LazyPage><Home /></LazyPage></ProtectedRoute>} />
+              <Route path="home" element={<ProtectedRoute><LazyPage><Home /></LazyPage></ProtectedRoute>} />
+              <Route path="explore" element={<LazyPage><Explore /></LazyPage>} />
+              <Route path="resources/:slug/read" element={<LazyPage><PdfReader /></LazyPage>} />
+              <Route path="resources/:slug" element={<LazyPage><ResourceDetails /></LazyPage>} />
+              <Route path="videos/:slug" element={<LazyPage><VideoDetails /></LazyPage>} />
+              <Route path="search" element={<LazyPage><SearchResults /></LazyPage>} />
+              <Route path="saved" element={<ProtectedRoute><LazyPage><SavedResources /></LazyPage></ProtectedRoute>} />
+              <Route path="community" element={<LazyPage><Community /></LazyPage>} />
+              <Route path="community/ask" element={<ProtectedRoute><LazyPage><AskQuestion /></LazyPage></ProtectedRoute>} />
+              <Route path="questions/:slug" element={<LazyPage><QuestionDetails /></LazyPage>} />
+              <Route path="users/:username" element={<LazyPage><UserProfile /></LazyPage>} />
+              <Route path="pdf/:slug" element={<LazyPage><PdfReader /></LazyPage>} />
+              <Route path="upload" element={<ProtectedRoute><LazyPage><UploadResource /></LazyPage></ProtectedRoute>} />
+              <Route path="notifications" element={<ProtectedRoute><LazyPage><Notifications /></LazyPage></ProtectedRoute>} />
+              <Route path="dashboard" element={<ProtectedRoute><LazyPage><Dashboard /></LazyPage></ProtectedRoute>} />
+              <Route path="profile" element={<ProtectedRoute><LazyPage><StudentProfile /></LazyPage></ProtectedRoute>} />
+              <Route path="profile/edit" element={<ProtectedRoute><LazyPage><EditProfile /></LazyPage></ProtectedRoute>} />
+              <Route path="profile/:username" element={<LazyPage><UserProfile /></LazyPage>} />
+              <Route path="community/questions/:slug" element={<LazyPage><QuestionDetails /></LazyPage>} />
+              <Route path="*" element={<LazyPage><NotFound /></LazyPage>} />
             </Route>
           </Routes>
         </AuthGate>

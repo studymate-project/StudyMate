@@ -19,6 +19,9 @@ const notificationTypeLabels = {
 const actorColors = ['bg-[#073c68]', 'bg-[#260777]', 'bg-[#005448]', 'bg-[#763800]', 'bg-[#69006f]']
 
 let notificationListRequest
+let notificationListCache
+let notificationCacheGeneration = 0
+const NOTIFICATION_CACHE_TTL_MS = 30 * 1000
 
 function getInitials(actor) {
   const name = [actor?.first_name, actor?.last_name].filter(Boolean).join(' ') || actor?.username || ''
@@ -123,26 +126,49 @@ function normalizeResponse(data) {
 }
 
 export function listNotifications() {
+  if (notificationListCache && notificationListCache.expiresAt > Date.now()) {
+    return Promise.resolve(notificationListCache.data)
+  }
   if (notificationListRequest) return notificationListRequest
 
-  notificationListRequest = apiClient
+  const requestGeneration = notificationCacheGeneration
+  const request = apiClient
     .get('/notifications/')
-    .then((response) => normalizeResponse(response.data))
+    .then((response) => {
+      const data = normalizeResponse(response.data)
+      if (requestGeneration === notificationCacheGeneration) {
+        notificationListCache = { data, expiresAt: Date.now() + NOTIFICATION_CACHE_TTL_MS }
+      }
+      return data
+    })
 
-  notificationListRequest.then(
-    () => { notificationListRequest = undefined },
-    () => { notificationListRequest = undefined },
+  notificationListRequest = request
+  request.then(
+    () => { if (notificationListRequest === request) notificationListRequest = undefined },
+    () => { if (notificationListRequest === request) notificationListRequest = undefined },
   )
 
   return notificationListRequest
 }
 
+export function clearNotificationCache() {
+  notificationListCache = undefined
+  notificationCacheGeneration += 1
+  notificationListRequest = undefined
+}
+
 export function markNotificationRead(notificationId) {
   return apiClient
     .patch(`/notifications/${notificationId}/read/`)
-    .then((response) => normalizeNotification(response.data))
+    .then((response) => {
+      clearNotificationCache()
+      return normalizeNotification(response.data)
+    })
 }
 
 export function markAllNotificationsRead() {
-  return apiClient.patch('/notifications/read-all/').then((response) => response.data)
+  return apiClient.patch('/notifications/read-all/').then((response) => {
+    clearNotificationCache()
+    return response.data
+  })
 }

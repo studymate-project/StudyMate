@@ -1,6 +1,9 @@
 import { apiClient } from './client'
 
 const inFlightRequests = new Map()
+const questionListCache = new Map()
+const QUESTION_LIST_CACHE_TTL_MS = 30 * 1000
+let questionCacheGeneration = 0
 
 function formatDate(value) {
   if (!value) return null
@@ -35,6 +38,8 @@ export function normalizeAnswer(answer) {
     isHelpful: answer.is_helpful,
     upvotes: answer.upvotes ?? null,
     createdAt: formatDate(answer.created_at),
+    questionTitle: answer.question_title || '',
+    questionSlug: answer.question_slug || '',
   }
 }
 
@@ -72,15 +77,46 @@ function normalizeQuestionResponse(data) {
 }
 
 export function listQuestions(params = {}) {
-  return apiClient
-    .get('/questions/', { params })
-    .then((response) => normalizeQuestionResponse(response.data))
+  const query = Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''))
+  const requestKey = JSON.stringify(query)
+  const cached = questionListCache.get(requestKey)
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.data)
+  const existingRequest = inFlightRequests.get(`list:${requestKey}`)
+  if (existingRequest) return existingRequest
+
+  const requestGeneration = questionCacheGeneration
+  const request = apiClient
+    .get('/questions/', { params: query })
+    .then((response) => {
+      const data = normalizeQuestionResponse(response.data)
+      if (requestGeneration === questionCacheGeneration) {
+        questionListCache.set(requestKey, { data, expiresAt: Date.now() + QUESTION_LIST_CACHE_TTL_MS })
+      }
+      return data
+    })
+  inFlightRequests.set(`list:${requestKey}`, request)
+  request.then(
+    () => inFlightRequests.delete(`list:${requestKey}`),
+    () => inFlightRequests.delete(`list:${requestKey}`),
+  )
+  return request
+}
+
+export function clearQuestionListCache() {
+  questionListCache.clear()
+  questionCacheGeneration += 1
+  inFlightRequests.forEach((request, key) => {
+    if (String(key).startsWith('list:')) inFlightRequests.delete(key)
+  })
 }
 
 export function createQuestion(payload) {
   return apiClient
     .post('/questions/', payload)
-    .then((response) => normalizeQuestion(response.data))
+    .then((response) => {
+      clearQuestionListCache()
+      return normalizeQuestion(response.data)
+    })
 }
 
 export function getQuestionBySlug(slug) {
@@ -127,18 +163,40 @@ export async function listAnswers(questionId) {
   return { answers, count }
 }
 
+export function listAnswersByAuthor() {
+  return apiClient
+    .get('/questions/answers/')
+    .then((response) => {
+      const data = response.data
+      const results = Array.isArray(data) ? data : data?.results || []
+      return {
+        answers: results.map(normalizeAnswer),
+        count: Array.isArray(data) ? results.length : data?.count ?? results.length,
+      }
+    })
+}
+
 export function createAnswer(questionId, body) {
   return apiClient
     .post(`/questions/${questionId}/answers/`, { body })
-    .then((response) => normalizeAnswer(response.data))
+    .then((response) => {
+      clearQuestionListCache()
+      return normalizeAnswer(response.data)
+    })
 }
 
 export function upvoteQuestion(questionId) {
-  return apiClient.post(`/questions/${questionId}/upvote/`).then((response) => response.data)
+  return apiClient.post(`/questions/${questionId}/upvote/`).then((response) => {
+    clearQuestionListCache()
+    return response.data
+  })
 }
 
 export function removeQuestionUpvote(questionId) {
-  return apiClient.delete(`/questions/${questionId}/upvote/`).then((response) => response.data)
+  return apiClient.delete(`/questions/${questionId}/upvote/`).then((response) => {
+    clearQuestionListCache()
+    return response.data
+  })
 }
 
 export function upvoteAnswer(questionId, answerId) {

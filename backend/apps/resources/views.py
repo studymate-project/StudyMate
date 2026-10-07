@@ -1,4 +1,4 @@
-from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.db.models import Case, Count, Exists, IntegerField, OuterRef, Q, Value, When
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import (
@@ -64,6 +64,12 @@ RESOURCE_LIST_PARAMETERS = [
         OpenApiParameter.QUERY,
         enum=["latest", "popular", "top_rated", "top rated", "most_downloaded", "most downloaded"],
         description="Ordering option; omitted values use the endpoint's default ordering.",
+    ),
+    OpenApiParameter(
+        "uploader",
+        OpenApiTypes.INT,
+        OpenApiParameter.QUERY,
+        description="Filter resources owned by one user ID.",
     ),
 ]
 
@@ -155,6 +161,14 @@ class ResourceViewSet(ModelViewSet):
             _upvote_count=Count("upvotes", distinct=True),
         )
         if self.request.user.is_authenticated:
+            queryset = queryset.annotate(
+                _is_saved=Exists(
+                    SavedResource.objects.filter(
+                        resource_id=OuterRef("pk"),
+                        user=self.request.user,
+                    )
+                )
+            )
             return queryset.filter(Q(status=PublicationStatus.PUBLISHED) | Q(uploader=self.request.user))
         return queryset.filter(status=PublicationStatus.PUBLISHED)
 
@@ -203,6 +217,16 @@ class ResourceViewSet(ModelViewSet):
             value = self.request.query_params.get(field)
             if value is not None:
                 queryset = queryset.filter(**{f"{field}__iexact": value.strip()})
+
+        uploader = self.request.query_params.get("uploader")
+        if uploader is not None:
+            try:
+                uploader_id = int(uploader)
+            except (TypeError, ValueError):
+                return queryset.none()
+            if uploader_id < 1:
+                return queryset.none()
+            queryset = queryset.filter(uploader_id=uploader_id)
 
         for field, choices in (
             ("resource_type", Resource.ResourceType.choices),
@@ -328,6 +352,7 @@ class SavedResourceListView(ListAPIView):
             _download_count=Count("download_events", distinct=True),
             _save_count=Count("saved_by", distinct=True),
             _upvote_count=Count("upvotes", distinct=True),
+            _is_saved=Value(True),
         )
         return queryset.filter(
             Q(saved_by__user=self.request.user)

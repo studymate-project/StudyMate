@@ -41,10 +41,16 @@ const supportedQueryKeys = new Set([
   'difficulty',
   'tags',
   'ordering',
+  'uploader',
 ])
 
 const inFlightRequests = new Map()
+const resourceListCache = new Map()
+const RESOURCE_LIST_CACHE_TTL_MS = 30 * 1000
+let resourceCacheGeneration = 0
 let savedResourcesRequest
+let savedResourcesCache
+let savedResourcesGeneration = 0
 
 function formatDate(value) {
   if (!value) return null
@@ -135,15 +141,24 @@ function normalizeResponse(data) {
 export function listResources(params = {}) {
   const query = normalizeParams(params)
   const requestKey = JSON.stringify(query)
+  const cached = resourceListCache.get(requestKey)
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.data)
   const existingRequest = inFlightRequests.get(requestKey)
   if (existingRequest) return existingRequest
 
+  const requestGeneration = resourceCacheGeneration
   const request = apiClient
     .get('/resources/', {
       params: query,
       paramsSerializer: { indexes: null },
     })
-    .then((response) => normalizeResponse(response.data))
+    .then((response) => {
+      const data = normalizeResponse(response.data)
+      if (requestGeneration === resourceCacheGeneration) {
+        resourceListCache.set(requestKey, { data, expiresAt: Date.now() + RESOURCE_LIST_CACHE_TTL_MS })
+      }
+      return data
+    })
 
   inFlightRequests.set(requestKey, request)
   request.then(
@@ -154,36 +169,61 @@ export function listResources(params = {}) {
   return request
 }
 
+export function clearResourceListCache() {
+  resourceListCache.clear()
+  inFlightRequests.clear()
+  resourceCacheGeneration += 1
+  savedResourcesCache = undefined
+  savedResourcesGeneration += 1
+  savedResourcesRequest = undefined
+}
+
 export function createResource(formData, uploadId) {
   return apiClient
     .post('/resources/', formData, {
       timeout: 120000,
       headers: uploadId ? { 'X-Upload-ID': uploadId } : undefined,
     })
-    .then((response) => response.data)
+    .then((response) => {
+      clearResourceListCache()
+      return response.data
+    })
 }
 
 export function listSavedResources() {
+  if (savedResourcesCache) return Promise.resolve(savedResourcesCache)
   if (savedResourcesRequest) return savedResourcesRequest
 
-  savedResourcesRequest = apiClient
+  const requestGeneration = savedResourcesGeneration
+  const request = apiClient
     .get('/saved-resources/')
-    .then((response) => normalizeResponse(response.data))
+    .then((response) => {
+      const data = normalizeResponse(response.data)
+      if (requestGeneration === savedResourcesGeneration) savedResourcesCache = data
+      return data
+    })
 
-  savedResourcesRequest.then(
-    () => { savedResourcesRequest = undefined },
-    () => { savedResourcesRequest = undefined },
+  savedResourcesRequest = request
+  request.then(
+    () => { if (savedResourcesRequest === request) savedResourcesRequest = undefined },
+    () => { if (savedResourcesRequest === request) savedResourcesRequest = undefined },
   )
 
   return savedResourcesRequest
 }
 
 export function saveResource(resourceId) {
-  return apiClient.post(`/resources/${resourceId}/save/`).then((response) => response.data)
+  return apiClient.post(`/resources/${resourceId}/save/`).then((response) => {
+    clearResourceListCache()
+    return response.data
+  })
 }
 
 export function unsaveResource(resourceId) {
-  return apiClient.delete(`/resources/${resourceId}/save/`).then((response) => response.data)
+  return apiClient.delete(`/resources/${resourceId}/save/`).then((response) => {
+    clearResourceListCache()
+    return response.data
+  })
 }
 
 export function getResourceBySlug(slug) {
