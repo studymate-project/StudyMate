@@ -204,6 +204,14 @@ class InterestViewSet(ReadOnlyModelViewSet):
     ),
     retrieve=extend_schema(
         summary="Get a student interest",
+        parameters=[
+            OpenApiParameter(
+                "id",
+                OpenApiTypes.INT,
+                OpenApiParameter.PATH,
+                description="Student-interest record ID.",
+            ),
+        ],
         responses={200: StudentInterestSerializer, 404: NOT_FOUND},
     ),
 )

@@ -1,4 +1,6 @@
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 
 from apps.core.model_utils import unique_slug
@@ -19,6 +21,7 @@ class Question(models.Model):
     status = models.CharField(max_length=12, choices=PublicationStatus.choices, default=PublicationStatus.PUBLISHED, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    search_vector = SearchVectorField(null=True, editable=False)
 
     class Meta:
         ordering = ("-created_at",)
@@ -26,6 +29,12 @@ class Question(models.Model):
             models.Index(fields=["author", "created_at"]),
             models.Index(fields=["subject", "topic"]),
             models.Index(fields=["academic_level", "status", "created_at"]),
+            GinIndex(fields=["search_vector"], name="community_question_search_fts"),
+            GinIndex(
+                fields=["title", "body", "subject", "topic"],
+                name="community_question_search_trgm",
+                opclasses=("gin_trgm_ops",) * 4,
+            ),
         ]
 
     def save(self, *args, **kwargs):

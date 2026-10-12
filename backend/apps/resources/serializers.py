@@ -71,23 +71,23 @@ class ResourceSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "slug", "uploader", "status", "created_at", "updated_at")
 
     @staticmethod
-    def _count(instance, annotation_name, related_name):
+    def _count(instance: Resource, annotation_name: str, related_name: str) -> int:
         annotated_count = getattr(instance, annotation_name, None)
         return annotated_count if annotated_count is not None else getattr(instance, related_name).count()
 
-    def get_views(self, instance):
+    def get_views(self, instance: Resource) -> int:
         return self._count(instance, "_view_count", "view_events")
 
-    def get_downloads(self, instance):
+    def get_downloads(self, instance: Resource) -> int:
         return self._count(instance, "_download_count", "download_events")
 
-    def get_saves(self, instance):
+    def get_saves(self, instance: Resource) -> int:
         return self._count(instance, "_save_count", "saved_by")
 
-    def get_upvotes(self, instance):
+    def get_upvotes(self, instance: Resource) -> int:
         return self._count(instance, "_upvote_count", "upvotes")
 
-    def get_is_saved(self, instance):
+    def get_is_saved(self, instance: Resource) -> bool:
         if hasattr(instance, "_is_saved"):
             return bool(instance._is_saved)
         request = self.context.get("request")

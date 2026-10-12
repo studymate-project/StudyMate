@@ -159,7 +159,7 @@ class ResourceViewSet(ModelViewSet):
             _download_count=Count("download_events", distinct=True),
             _save_count=Count("saved_by", distinct=True),
             _upvote_count=Count("upvotes", distinct=True),
-        )
+        ).order_by("-created_at", "-pk")
         if self.request.user.is_authenticated:
             queryset = queryset.annotate(
                 _is_saved=Exists(
@@ -353,7 +353,7 @@ class SavedResourceListView(ListAPIView):
             _save_count=Count("saved_by", distinct=True),
             _upvote_count=Count("upvotes", distinct=True),
             _is_saved=Value(True),
-        )
+        ).order_by("-created_at", "-pk")
         return queryset.filter(
             Q(saved_by__user=self.request.user)
             & (Q(status=PublicationStatus.PUBLISHED) | Q(uploader=self.request.user))

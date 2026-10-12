@@ -1,35 +1,119 @@
-import { Bookmark, Search, UserRound } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Bookmark, MessageCircle, Search, Video as VideoIcon } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import Badge from '../components/common/Badge'
 import Button from '../components/common/Button'
 import SearchFilters from '../components/search/SearchFilters'
 import SearchSection from '../components/search/SearchSection'
-import { listQuestions } from '../api'
-import { formatNumber, getUserById, searchAll } from '../data/dataHelpers'
+import Spinner from '../components/common/Spinner'
+import { getApiErrorMessage } from '../api'
+import { normalizeSearchQuery, searchContent, SEARCH_PAGE_SIZE } from '../api/search'
 import { searchFilters } from '../data/searchResults'
+import { getSearchResultRoute } from '../utils/searchUtils'
+
+const SEARCH_DEBOUNCE_MS = 350
+const typeLabels = {
+  resource: 'Resource',
+  video: 'Video',
+  question: 'Question',
+}
+const metadataLabels = {
+  resource_type: 'Type',
+  subject: 'Subject',
+  topic: 'Topic',
+  course: 'Course',
+  semester: 'Semester',
+}
+
+function isCanceledRequest(error) {
+  return error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError'
+}
+
+function resultKey(result) {
+  return `${result.type}:${result.id}`
+}
+
+function formatMetadataValue(value) {
+  return String(value).replaceAll('_', ' ')
+}
+
+function ResultTypeIcon({ type }) {
+  if (type === 'video') return <VideoIcon size={16} aria-hidden="true" />
+  if (type === 'question') return <MessageCircle size={16} aria-hidden="true" />
+  return <Bookmark size={16} aria-hidden="true" />
+}
+
+function SearchResultCard({ result }) {
+  const route = getSearchResultRoute(result)
+  const metadata = Object.entries(result.metadata || {})
+    .filter(([key, value]) => key !== 'youtube_video_id' && value !== null && value !== undefined && value !== '')
+    .slice(0, 4)
+
+  const content = (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase text-[var(--color-primary-light)]">
+          <ResultTypeIcon type={result.type} />
+          {typeLabels[result.type] || 'Result'}
+        </span>
+        {metadata.map(([key, value]) => (
+          <Badge key={`${resultKey(result)}-${key}`} variant="blue">
+            {metadataLabels[key] || key}: {formatMetadataValue(value)}
+          </Badge>
+        ))}
+      </div>
+      <h3 className="mt-3 text-base font-black text-white">{result.title}</h3>
+      {result.snippet && <p className="mt-2 line-clamp-3 text-sm font-bold leading-6 text-[var(--color-text)]">{result.snippet}</p>}
+      {typeof result.score === 'number' && (
+        <p className="mt-3 text-xs font-black text-[var(--color-text-dim)]">Relevance {result.score.toFixed(3)}</p>
+      )}
+    </>
+  )
+
+  if (!route) {
+    return <div className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">{content}</div>
+  }
+
+  return <Link to={route} className="relative block border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-primary-light)]">{content}</Link>
+}
 
 function SearchResults() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlQuery = normalizeSearchQuery(searchParams.get('q'))
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
-  const initialQuery = searchParams.get('q') || 'java oop'
-  const [query, setQuery] = useState(initialQuery)
-  const [questionResults, setQuestionResults] = useState([])
-  useEffect(() => {
-    let active = true
-    listQuestions({ search: initialQuery })
-      .then(({ questions }) => { if (active) setQuestionResults(questions) })
-      .catch(() => { if (active) setQuestionResults([]) })
-    return () => { active = false }
-  }, [initialQuery])
-  const results = useMemo(() => ({ ...searchAll(initialQuery), questions: questionResults }), [initialQuery, questionResults])
-  const resultCount = Object.values(results).reduce((sum, items) => sum + items.length, 0)
+  const queryInput = useRef(null)
+  const debounceTimer = useRef(null)
+
+  const updateUrlQuery = useCallback((value, replace = true) => {
+    const normalizedQuery = normalizeSearchQuery(value)
+    setSearchParams(normalizedQuery ? { q: normalizedQuery } : {}, { replace })
+  }, [setSearchParams])
 
   const submit = (event) => {
     event.preventDefault()
-    navigate(query.trim() ? `/search?q=${encodeURIComponent(query.trim())}` : '/search')
+    if (debounceTimer.current) window.clearTimeout(debounceTimer.current)
+    updateUrlQuery(queryInput.current?.value || '', false)
   }
+
+  const handleQueryChange = (event) => {
+    const nextQuery = event.target.value
+    if (debounceTimer.current) window.clearTimeout(debounceTimer.current)
+    debounceTimer.current = window.setTimeout(() => updateUrlQuery(nextQuery), SEARCH_DEBOUNCE_MS)
+  }
+
+  const clearSearch = () => {
+    if (debounceTimer.current) window.clearTimeout(debounceTimer.current)
+    if (queryInput.current) queryInput.current.value = ''
+    updateUrlQuery('', false)
+  }
+
+  useEffect(() => {
+    if (queryInput.current && queryInput.current.value !== urlQuery) queryInput.current.value = urlQuery
+  }, [urlQuery])
+
+  useEffect(() => () => {
+    if (debounceTimer.current) window.clearTimeout(debounceTimer.current)
+  }, [])
 
   return (
     <div>
@@ -37,16 +121,25 @@ function SearchResults() {
         <div className="mx-auto max-w-[1260px]">
           <form onSubmit={submit} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_110px_100px]">
             <label className="relative min-w-0">
-              <span className="sr-only">Search resources</span>
+              <span className="sr-only">Search resources, videos, and questions</span>
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text)]" size={20} />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-14 w-full border-2 border-[var(--color-border)] bg-[var(--color-surface)] pl-12 pr-4 text-base font-black text-white outline-none focus:border-[#58a7df]" />
+              <input
+                ref={queryInput}
+                type="search"
+                defaultValue={urlQuery}
+                onChange={handleQueryChange}
+                placeholder="Search resources, videos, and questions"
+                className="h-14 w-full border-2 border-[var(--color-border)] bg-[var(--color-surface)] pl-12 pr-4 text-base font-black text-white outline-none focus:border-[#58a7df]"
+              />
             </label>
             <Button type="submit">Search</Button>
-            <Button type="button" variant="secondary" onClick={() => { setQuery(''); navigate('/search') }}>Clear</Button>
+            <Button type="button" variant="secondary" onClick={clearSearch}>Clear</Button>
           </form>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            {(initialQuery ? initialQuery.split(' ') : ['All']).map((chip) => <Badge key={chip} variant="blue">{chip}</Badge>)}
-            <span className="text-sm font-black text-[var(--color-text)]">Showing {resultCount} results for "{initialQuery || 'all'}"</span>
+            {(urlQuery ? urlQuery.split(' ') : ['All']).map((chip) => <Badge key={chip} variant="blue">{chip}</Badge>)}
+            <span className="text-sm font-black text-[var(--color-text)]">
+              {urlQuery ? `Search results for "${urlQuery}"` : 'Search across resources, videos, and questions'}
+            </span>
           </div>
         </div>
       </section>
@@ -60,36 +153,108 @@ function SearchResults() {
         <div className={filtersOpen ? 'block' : 'hidden lg:block'}><SearchFilters groups={searchFilters} /></div>
 
         <section className="min-w-0 px-5 py-7 sm:px-8">
-          <SearchSection title="Resources">{results.resources.map((resource) => <ResourceResult key={resource.id} resource={resource} />)}</SearchSection>
-          <SearchSection title="Videos">{results.videos.map((video) => <VideoResult key={video.id} video={video} />)}</SearchSection>
-          <SearchSection title="Questions">{results.questions.map((question) => <QuestionResult key={question.id} question={question} />)}</SearchSection>
-          <SearchSection title="Users"><div className="grid gap-3 sm:grid-cols-2">{results.users.map((user) => <UserResult key={user.id} user={user} />)}</div></SearchSection>
+          <SearchSection title="Results" showViewAll={false}>
+            {!urlQuery && <div className="border-2 border-dashed border-[var(--color-border)] px-5 py-12 text-center text-sm font-black text-[var(--color-text)]">Enter a search term to find study resources, videos, and questions.</div>}
+            {urlQuery && <SearchResultContent key={urlQuery} query={urlQuery} />}
+          </SearchSection>
         </section>
       </div>
     </div>
   )
 }
 
-function ResultShell({ to, children }) {
-  return <Link to={to} className="relative block border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 pr-11 transition-colors hover:border-[var(--color-primary-light)]">{children}</Link>
-}
+function SearchResultContent({ query }) {
+  const [results, setResults] = useState([])
+  const [hasMore, setHasMore] = useState(false)
+  const [nextOffset, setNextOffset] = useState(null)
+  const [loading, setLoading] = useState(Boolean(query))
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState(null)
+  const [retryNumber, setRetryNumber] = useState(0)
+  const requestSequence = useRef(0)
+  const loadMoreController = useRef(null)
 
-function ResourceResult({ resource }) {
-  const author = getUserById(resource.authorId)
-  return <ResultShell to={`/resources/${resource.slug}`}><Bookmark className="absolute right-4 top-4 text-[#58a7df]" size={18} /><h3 className="text-base font-black text-white">{resource.title}</h3><p className="mt-3 text-sm font-black text-[var(--color-text)]">{resource.type} - Uploaded by {author?.name}</p><p className="mt-3 text-sm font-black text-[var(--color-text)]">★ {resource.rating} - {formatNumber(resource.downloads)} Downloads - {formatNumber(resource.saves)} Saves</p></ResultShell>
-}
+  useEffect(() => {
+    const sequence = requestSequence.current + 1
+    requestSequence.current = sequence
+    const controller = new AbortController()
 
-function VideoResult({ video }) {
-  const author = getUserById(video.authorId)
-  return <ResultShell to={`/videos/${video.slug}`}><h3 className="text-base font-black text-white">{video.title}</h3><p className="mt-3 text-sm font-black text-[var(--color-text)]">Video - {video.duration} - by {author?.name}</p><p className="mt-3 text-sm font-black text-[var(--color-text)]">{formatNumber(video.views)} Views - {video.upvotes} Upvotes</p></ResultShell>
-}
+    searchContent(query, { limit: SEARCH_PAGE_SIZE, offset: 0, signal: controller.signal })
+      .then((data) => {
+        if (sequence !== requestSequence.current) return
+        setResults(data.results)
+        setHasMore(data.hasMore)
+        setNextOffset(data.nextOffset)
+      })
+      .catch((requestError) => {
+        if (sequence !== requestSequence.current || isCanceledRequest(requestError)) return
+        setError(requestError)
+      })
+      .finally(() => {
+        if (sequence === requestSequence.current) setLoading(false)
+      })
 
-function QuestionResult({ question }) {
-  return <ResultShell to={`/questions/${question.slug}`}><h3 className="text-base font-black text-white">{question.title}</h3><p className="mt-3 text-sm font-black text-[var(--color-text)]">Asked by {question.author?.name || 'StudyMate member'} - {question.upvotes ?? 0} Upvotes - {question.answerCount} Answers</p></ResultShell>
-}
+    return () => {
+      controller.abort()
+      loadMoreController.current?.abort()
+    }
+  }, [query, retryNumber])
 
-function UserResult({ user }) {
-  return <ResultShell to={`/users/${user.username}`}><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#260777] text-[var(--color-primary-light)]"><UserRound size={20} /></span><span><strong className="block text-white">{user.name}</strong><span className="text-sm font-black text-[var(--color-text)]">{user.points} Points</span></span></div></ResultShell>
+  const loadMore = async () => {
+    if (!hasMore || nextOffset === null || loading || loadingMore) return
+
+    const sequence = requestSequence.current
+    const controller = new AbortController()
+    loadMoreController.current = controller
+    setLoadingMore(true)
+
+    try {
+      const data = await searchContent(query, {
+        limit: SEARCH_PAGE_SIZE,
+        offset: nextOffset,
+        signal: controller.signal,
+      })
+      if (sequence !== requestSequence.current) return
+
+      setResults((currentResults) => {
+        const existingKeys = new Set(currentResults.map(resultKey))
+        return [...currentResults, ...data.results.filter((result) => !existingKeys.has(resultKey(result)))]
+      })
+      setHasMore(data.hasMore)
+      setNextOffset(data.nextOffset)
+    } catch (requestError) {
+      if (sequence === requestSequence.current && !isCanceledRequest(requestError)) setError(requestError)
+    } finally {
+      if (sequence === requestSequence.current) {
+        setLoadingMore(false)
+        loadMoreController.current = null
+      }
+    }
+  }
+
+  if (loading) return <div className="flex items-center justify-center gap-3 px-5 py-12 text-sm font-black text-[var(--color-text)]" role="status"><Spinner label="Searching" /> Searching StudyMate</div>
+  if (error) {
+    return (
+      <div className="border-2 border-[var(--color-danger)] bg-[var(--color-surface)] px-5 py-8 text-center" role="alert">
+        <p className="text-sm font-black text-white">{getApiErrorMessage(error)}</p>
+        <Button type="button" variant="secondary" className="mt-5" onClick={() => { setError(null); setLoading(true); setRetryNumber((value) => value + 1) }}>Try again</Button>
+      </div>
+    )
+  }
+  if (!results.length) return <div className="border-2 border-dashed border-[var(--color-border)] px-5 py-12 text-center text-sm font-black text-[var(--color-text)]">No resources, videos, or questions matched "{query}".</div>
+
+  return (
+    <>
+      {results.map((result) => <SearchResultCard key={resultKey(result)} result={result} />)}
+      {hasMore && (
+        <div className="flex justify-center pt-3">
+          <Button type="button" variant="secondary" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? <><Spinner label="Loading more results" /> Loading more</> : 'Load more results'}
+          </Button>
+        </div>
+      )}
+    </>
+  )
 }
 
 export default SearchResults

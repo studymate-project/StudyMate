@@ -2,7 +2,7 @@ from django.conf import settings
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
-from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.generics import CreateAPIView
@@ -26,6 +26,7 @@ from apps.users.serializers import (
 
 from .authentication import CookieJWTAuthentication
 from .schema import BAD_REQUEST, CSRF_HEADER, FORBIDDEN, NOT_FOUND, UNAUTHENTICATED
+from .search import SearchRequestSerializer, SearchResponseSerializer, normalize_search_query, search_content
 
 
 AUTH_USER_DATA = inline_serializer(
@@ -350,3 +351,57 @@ def api_root(request: Request) -> Response:
 def health(request: Request) -> Response:
     """Return a minimal public status response for deployment checks."""
     return Response({'status': 'ok'})
+
+
+@extend_schema(
+    summary="Search public and accessible study content",
+    description=(
+        "Search resources, videos, and questions with PostgreSQL full-text and trigram ranking. "
+        "Results are bounded and ordered deterministically. Authenticated owners may also find "
+        "their own non-published content."
+    ),
+    parameters=[
+        OpenApiParameter(
+            "q",
+            OpenApiTypes.STR,
+            OpenApiParameter.QUERY,
+            required=True,
+            description="Search terms; whitespace is normalized and limited to 200 characters.",
+        ),
+        OpenApiParameter(
+            "limit",
+            OpenApiTypes.INT,
+            OpenApiParameter.QUERY,
+            required=False,
+            default=20,
+            description="Number of results to return, from 1 to 50.",
+        ),
+        OpenApiParameter(
+            "offset",
+            OpenApiTypes.INT,
+            OpenApiParameter.QUERY,
+            required=False,
+            default=0,
+            description="Number of globally ranked results to skip, up to 1000.",
+        ),
+    ],
+    responses={200: SearchResponseSerializer, 400: BAD_REQUEST},
+)
+class SearchView(APIView):
+    permission_classes = (AllowAny,)
+
+    def get(self, request: Request) -> Response:
+        request_serializer = SearchRequestSerializer(data=request.query_params)
+        request_serializer.is_valid(raise_exception=True)
+        query = normalize_search_query(request_serializer.validated_data["q"])
+        if not query:
+            raise serializers.ValidationError({"q": "Search query must not be blank."})
+
+        return Response(
+            search_content(
+                request,
+                query,
+                request_serializer.validated_data["limit"],
+                request_serializer.validated_data["offset"],
+            )
+        )

@@ -122,7 +122,7 @@ class QuestionViewSet(
         queryset = Question.objects.select_related("author", "academic_level").prefetch_related("tags").annotate(
             upvotes_count=Count("upvotes", distinct=True),
             answers_count=Count("answers", distinct=True),
-        )
+        ).order_by("-created_at", "-pk")
         if self.request.user.is_authenticated:
             return queryset.filter(Q(status=PublicationStatus.PUBLISHED) | Q(author=self.request.user))
         return queryset.filter(status=PublicationStatus.PUBLISHED)
@@ -158,10 +158,12 @@ class QuestionViewSet(
         serializer.save(author=self.request.user)
 
 
-@extend_schema(
-    operation_id="profile_answers_list",
-    summary="List the authenticated user's answers",
-    responses=ProfileAnswerSerializer(many=True),
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="profile_answers_list",
+        summary="List the authenticated user's answers",
+        responses=ProfileAnswerSerializer(many=True),
+    ),
 )
 class ProfileAnswerListView(ListAPIView):
     """Return one bounded, ownership-scoped answer feed for the profile page."""

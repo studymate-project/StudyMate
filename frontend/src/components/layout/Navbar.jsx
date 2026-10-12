@@ -18,7 +18,13 @@ function Navbar() {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState('')
   const navigate = useNavigate()
-  const { status, signOut } = useAuth()
+  const { status, user, signOut } = useAuth()
+
+  const avatarUrl = user?.profile?.avatar_url || ''
+  const displayName = user?.profile?.display_name
+    || [user?.first_name, user?.last_name].filter(Boolean).join(' ')
+    || user?.username
+    || 'Your profile'
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -69,8 +75,8 @@ function Navbar() {
           </IconButton>
           <Link to="/notifications" aria-label="Notifications" className="inline-flex h-10 w-10 items-center justify-center border border-transparent text-[var(--color-text)] transition-colors hover:border-[var(--color-border)] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"><Bell size={20} /></Link>
           <div className="hidden sm:block">
-            <Link to="/profile" aria-label="Your profile" className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-primary-dark)] bg-[var(--color-primary-dark)] text-[var(--color-primary-light)] transition-colors hover:bg-[var(--color-primary)] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]">
-              <UserRound size={20} />
+            <Link to="/profile" aria-label="Your profile" className="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[var(--color-primary-dark)] bg-[var(--color-primary-dark)] text-[var(--color-primary-light)] transition-colors hover:bg-[var(--color-primary)] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]">
+              {avatarUrl ? <img src={avatarUrl} alt={`${displayName} avatar`} className="h-full w-full object-cover" /> : <UserRound size={20} />}
             </Link>
           </div>
           {status === 'authenticated' ? <button type="button" onClick={handleLogout} disabled={isLoggingOut} aria-label="Log out" title={logoutError || 'Log out'} className="inline-flex h-10 w-10 items-center justify-center border border-transparent text-[var(--color-text)] transition-colors hover:border-[var(--color-border)] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-60"><LogOut size={19} /></button> : null}
@@ -91,12 +97,13 @@ function Navbar() {
                 </NavLink>
               ))}
             </nav>
-            <button
-              type="button"
+            <Link
+              to="/profile"
               className="min-h-11 border border-[var(--color-primary-dark)] bg-[var(--color-primary-dark)] px-3 text-left text-sm font-semibold text-[var(--color-primary-light)]"
+              onClick={() => setMenuOpen(false)}
             >
               Profile
-            </button>
+            </Link>
             {status === 'authenticated' ? <button type="button" onClick={handleLogout} disabled={isLoggingOut} className="min-h-11 border border-[var(--color-border)] px-3 text-left text-sm font-semibold text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60">{isLoggingOut ? 'Logging out…' : 'Log out'}</button> : null}
             {logoutError ? <p role="alert" className="text-xs text-red-200">{logoutError}</p> : null}
           </div>

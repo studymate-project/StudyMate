@@ -1,6 +1,8 @@
 from collections.abc import Iterable
 
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVectorField
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -24,6 +26,13 @@ class Tag(models.Model):
 
     class Meta:
         ordering = ("name",)
+        indexes = [
+            GinIndex(
+                fields=["name", "slug"],
+                name="resources_tag_search_trgm",
+                opclasses=("gin_trgm_ops",) * 2,
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -68,6 +77,7 @@ class Resource(models.Model):
     client_upload_id = models.UUIDField(default=None, null=True, blank=True, unique=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    search_vector = SearchVectorField(null=True, editable=False)
 
     class Meta:
         ordering = ("-created_at",)
@@ -75,6 +85,12 @@ class Resource(models.Model):
             models.Index(fields=["uploader", "status", "created_at"]),
             models.Index(fields=["academic_level", "status", "created_at"]),
             models.Index(fields=["subject", "topic"]),
+            GinIndex(fields=["search_vector"], name="resources_resource_search_fts"),
+            GinIndex(
+                fields=["title", "description", "subject", "topic", "course", "semester"],
+                name="resources_resource_search_trgm",
+                opclasses=("gin_trgm_ops",) * 6,
+            ),
         ]
 
     def clean(self) -> None:
@@ -140,6 +156,7 @@ class Video(models.Model):
     status = models.CharField(max_length=12, choices=PublicationStatus.choices, default=PublicationStatus.DRAFT, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    search_vector = SearchVectorField(null=True, editable=False)
 
     class Meta:
         ordering = ("-created_at",)
@@ -147,6 +164,12 @@ class Video(models.Model):
             models.Index(fields=["uploader", "status", "created_at"]),
             models.Index(fields=["academic_level", "status", "created_at"]),
             models.Index(fields=["subject", "topic"]),
+            GinIndex(fields=["search_vector"], name="resources_video_search_fts"),
+            GinIndex(
+                fields=["title", "description", "subject", "topic", "course", "semester"],
+                name="resources_video_search_trgm",
+                opclasses=("gin_trgm_ops",) * 6,
+            ),
         ]
         constraints = [
             models.CheckConstraint(

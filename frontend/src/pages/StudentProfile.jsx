@@ -12,7 +12,7 @@ import { useAuth } from '../auth/useAuth'
 const tabs = ['Resources', 'Questions', 'Answers', 'Saved Resources']
 
 function StudentProfile() {
-  const { user: currentUser } = useAuth()
+  const { user: currentUser, updateUser } = useAuth()
   const [activeTab, setActiveTab] = useState('Resources')
   const [profileState, setProfileState] = useState({ status: 'loading', data: null, error: null })
   const [reloadKey, setReloadKey] = useState(0)
@@ -56,6 +56,10 @@ function StudentProfile() {
           },
         }
         : current)
+      updateUser({
+        ...currentUser,
+        profile: { ...currentUser.profile, avatar_url: nextAvatarUrl || '' },
+      })
       setAvatarState({ status: 'idle', error: '' })
     } catch (error) {
       setAvatarState({ status: 'error', error: getApiErrorMessage(error) })

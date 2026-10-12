@@ -663,6 +663,11 @@ class APIFoundationTests(TestCase):
             <= resource_filters
         )
 
+        search = schema["paths"]["/api/search/"]["get"]
+        search_parameters = {parameter["name"] for parameter in search["parameters"]}
+        self.assertEqual({"q", "limit", "offset"}, search_parameters)
+        self.assertTrue({"200", "400"} <= set(search["responses"]))
+
         resource_update = schema["paths"]["/api/resources/{lookup}/"]["patch"]
         self.assertTrue({"400", "401", "403", "404"} <= set(resource_update["responses"]))
         onboarding = schema["paths"]["/api/users/onboarding/"]["post"]
@@ -702,6 +707,26 @@ class APIFoundationTests(TestCase):
         answer_list = schema["paths"]["/api/questions/{question_id}/answers/"]["get"]
         self.assertIn("200", answer_list["responses"])
         self.assertIn("404", answer_list["responses"])
+
+    def test_openapi_schema_documents_fixed_parameter_and_serializer_types(self):
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+
+        student_interest_retrieve = schema["paths"]["/api/education/student-interests/{id}/"]["get"]
+        student_interest_id = next(
+            parameter for parameter in student_interest_retrieve["parameters"] if parameter["name"] == "id"
+        )
+        self.assertEqual(student_interest_id["schema"]["type"], "integer")
+
+        profile_answers = schema["paths"]["/api/questions/answers/"]["get"]
+        self.assertEqual(profile_answers["operationId"], "profile_answers_list")
+
+        resource_schema = schema["components"]["schemas"]["Resource"]
+        resource_properties = resource_schema["properties"]
+        for field_name in ("views", "downloads", "saves", "upvotes"):
+            with self.subTest(field=field_name):
+                self.assertEqual(resource_properties[field_name]["type"], "integer")
+        self.assertEqual(resource_properties["is_saved"]["type"], "boolean")
+        self.assertNotIn("LevelTypeEnum", schema["components"]["schemas"])
 
 
 class SerializerTests(TestCase):
@@ -2829,6 +2854,28 @@ class APIViewTests(TestCase):
         self.assertEqual(response.data["results"][0]["id"], self.question.pk)
         self.assertEqual(response.data["results"][0]["answers"], 1)
         self.assertEqual(response.data["results"][0]["upvotes"], 0)
+
+    def test_question_pagination_uses_unique_created_at_tie_breaker(self):
+        older = Question.objects.create(
+            title="Older tied question",
+            body="Older body",
+            author=self.user,
+            subject="Physics",
+        )
+        newer_pk = Question.objects.create(
+            title="Newer tied question",
+            body="Newer body",
+            author=self.user,
+            subject="Physics",
+        ).pk
+        tied_created_at = timezone.now()
+        Question.objects.filter(pk=self.question.pk).update(created_at=tied_created_at - timedelta(days=1))
+        Question.objects.filter(pk__in=(older.pk, newer_pk)).update(created_at=tied_created_at)
+
+        response = self.client.get("/api/questions/?page_size=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["id"], newer_pk)
 
     def test_question_answers_are_paginated_serialized_and_scoped(self):
         second_answer = Answer.objects.create(
