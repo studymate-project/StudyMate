@@ -5,6 +5,7 @@ from rest_framework.test import APIClient
 
 from apps.community.models import Question
 from apps.resources.models import PublicationStatus, Resource, Tag, Video
+from apps.users.models import StudentProfile
 
 
 class UnifiedSearchAPITests(TestCase):
@@ -92,6 +93,23 @@ class UnifiedSearchAPITests(TestCase):
         self.assertIn("python", resource_result["snippet"].casefold())
         self.assertIn("subject", resource_result["metadata"])
         self.assertGreaterEqual(resource_result["score"], 0)
+
+    def test_search_includes_public_user_profiles_without_exposing_private_identity_fields(self):
+        StudentProfile.objects.create(
+            user=self.user,
+            display_name="Python Mentor",
+            bio="Helps students with Python algorithms.",
+        )
+
+        response = self.client.get("/api/search/?q=python")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        user_result = next(result for result in response.data["results"] if result["type"] == "user")
+        self.assertEqual(user_result["id"], self.user.pk)
+        self.assertEqual(user_result["title"], "Python Mentor")
+        self.assertEqual(user_result["metadata"], {"username": self.user.username})
+        self.assertEqual(user_result["detail_url"], f"/api/users/{self.user.username}/")
+        self.assertNotIn("email", user_result)
 
     def test_search_ranks_title_matches_and_orders_equal_results_deterministically(self):
         title_match = self.create_resource(title="rankingterm title match", description="Generic description")

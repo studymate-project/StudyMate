@@ -1,10 +1,10 @@
 from rest_framework import serializers
 
 from apps.community.models import Answer, Question
-from apps.resources.models import Resource
+from apps.resources.models import Resource, Video
 from apps.users.serializers import PublicUserSerializer
 
-from .models import AnswerUpvote, QuestionUpvote, ResourceUpvote, SavedResource
+from .models import AnswerUpvote, QuestionUpvote, ResourceRating, ResourceUpvote, SavedResource
 
 
 class ResourceReferenceSerializer(serializers.ModelSerializer):
@@ -46,6 +46,22 @@ class ResourceUpvoteSerializer(serializers.ModelSerializer):
         model = ResourceUpvote
         fields = ("id", "user", "resource", "resource_detail", "created_at")
         read_only_fields = ("id", "user", "resource_detail", "created_at")
+
+
+class ResourceRatingSerializer(serializers.ModelSerializer):
+    user = PublicUserSerializer(read_only=True)
+    resource = serializers.PrimaryKeyRelatedField(queryset=Resource.objects.all(), required=False, allow_null=True)
+    video = serializers.PrimaryKeyRelatedField(queryset=Video.objects.all(), required=False, allow_null=True)
+
+    class Meta:
+        model = ResourceRating
+        fields = ("id", "user", "resource", "video", "rating", "created_at", "updated_at")
+        read_only_fields = ("id", "user", "resource", "video", "created_at", "updated_at")
+
+    def validate_rating(self, value: int) -> int:
+        if value < 1 or value > 5:
+            raise serializers.ValidationError("Rating must be between 1 and 5 stars.")
+        return value
 
 
 class QuestionUpvoteSerializer(serializers.ModelSerializer):

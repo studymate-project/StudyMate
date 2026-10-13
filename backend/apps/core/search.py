@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from django.contrib.auth import get_user_model
 from django.contrib.postgres.search import SearchQuery, SearchRank, TrigramSimilarity
 from django.db import connection, transaction
-from django.db.models import ExpressionWrapper, F, FloatField, Q, Value
+from django.db.models import Case, ExpressionWrapper, F, FloatField, Q, Value, When
 from django.db.models.functions import Greatest
 from django.urls import reverse
 from rest_framework import serializers
@@ -21,6 +22,7 @@ MAX_SEARCH_LIMIT = 50
 MAX_SEARCH_OFFSET = 1000
 TRIGRAM_SIMILARITY_THRESHOLD = 0.15
 SNIPPET_LENGTH = 240
+User = get_user_model()
 
 
 class SearchRequestSerializer(serializers.Serializer):
@@ -45,7 +47,7 @@ class SearchRequestSerializer(serializers.Serializer):
 
 
 class SearchResultSerializer(serializers.Serializer):
-    type = serializers.ChoiceField(choices=("resource", "video", "question"), read_only=True)
+    type = serializers.ChoiceField(choices=("resource", "video", "question", "user"), read_only=True)
     id = serializers.IntegerField(read_only=True)
     title = serializers.CharField(read_only=True)
     snippet = serializers.CharField(read_only=True, allow_blank=True)
@@ -190,8 +192,60 @@ def _candidate_rows(request: Request, spec: _SearchSpec, query: str, candidate_l
     return results
 
 
+def _candidate_user_rows(query: str, candidate_limit: int) -> list[dict[str, Any]]:
+    """Return public user-profile matches using fields already exposed publicly."""
+
+    term_match = Q()
+    for term in query.split():
+        term_match |= (
+            Q(username__icontains=term)
+            | Q(first_name__icontains=term)
+            | Q(last_name__icontains=term)
+            | Q(student_profile__display_name__icontains=term)
+            | Q(student_profile__bio__icontains=term)
+        )
+
+    users = (
+        User.objects.filter(is_active=True)
+        .filter(term_match)
+        .select_related("student_profile")
+        .annotate(
+            _search_score=Case(
+                When(username__iexact=query, then=Value(1.0)),
+                When(student_profile__display_name__iexact=query, then=Value(1.0)),
+                When(username__icontains=query, then=Value(0.8)),
+                When(student_profile__display_name__icontains=query, then=Value(0.8)),
+                default=Value(0.5),
+                output_field=FloatField(),
+            )
+        )
+        .order_by("-_search_score", "-date_joined", "-pk")[:candidate_limit]
+    )
+
+    results = []
+    for user in users:
+        profile = user.student_profile if hasattr(user, "student_profile") else None
+        display_name = (profile.display_name if profile else "").strip()
+        if not display_name:
+            display_name = " ".join(part for part in (user.first_name, user.last_name) if part).strip()
+        display_name = display_name or user.username
+        results.append(
+            {
+                "type": "user",
+                "id": user.pk,
+                "title": display_name,
+                "snippet": _snippet(profile.bio if profile else ""),
+                "metadata": {"username": user.username},
+                "detail_url": reverse("user-profile-detail", kwargs={"identifier": user.username}),
+                "score": float(user._search_score or 0),
+                "_created_at": user.date_joined,
+            }
+        )
+    return results
+
+
 def search_content(request: Request, query: str, limit: int, offset: int) -> dict[str, Any]:
-    """Return a bounded, globally ranked union of visible content types."""
+    """Return a bounded, globally ranked union of visible content and users."""
 
     candidate_limit = offset + limit + 1
     with transaction.atomic():
@@ -208,6 +262,7 @@ def search_content(request: Request, query: str, limit: int, offset: int) -> dic
             for spec in SEARCH_SPECS
             for result in _candidate_rows(request, spec, query, candidate_limit)
         ]
+        candidates.extend(_candidate_user_rows(query, candidate_limit))
     candidates.sort(
         key=lambda result: (
             -result["score"],

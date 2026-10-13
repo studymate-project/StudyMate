@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.db.models import Avg
 from django.db import transaction
 from rest_framework import serializers
 from uuid import UUID
@@ -35,6 +36,9 @@ class ResourceSerializer(serializers.ModelSerializer):
     downloads = serializers.SerializerMethodField()
     saves = serializers.SerializerMethodField()
     upvotes = serializers.SerializerMethodField()
+    rating = serializers.SerializerMethodField()
+    rating_count = serializers.SerializerMethodField()
+    user_rating = serializers.SerializerMethodField()
     is_saved = serializers.SerializerMethodField()
     tag_ids = serializers.PrimaryKeyRelatedField(
         source="tags", many=True, queryset=Tag.objects.all(), write_only=True, required=False
@@ -66,6 +70,9 @@ class ResourceSerializer(serializers.ModelSerializer):
             "downloads",
             "saves",
             "upvotes",
+            "rating",
+            "rating_count",
+            "user_rating",
             "is_saved",
         )
         read_only_fields = ("id", "slug", "uploader", "status", "created_at", "updated_at")
@@ -86,6 +93,31 @@ class ResourceSerializer(serializers.ModelSerializer):
 
     def get_upvotes(self, instance: Resource) -> int:
         return self._count(instance, "_upvote_count", "upvotes")
+
+    @staticmethod
+    def _rating_average(instance: Resource) -> float | None:
+        if hasattr(instance, "_rating_average"):
+            average = instance._rating_average
+        else:
+            average = instance.ratings.aggregate(value=Avg("rating"))["value"]
+        return round(float(average), 2) if average is not None else None
+
+    def get_rating(self, instance: Resource) -> float | None:
+        return self._rating_average(instance)
+
+    def get_rating_count(self, instance: Resource) -> int:
+        if hasattr(instance, "_rating_count"):
+            return int(instance._rating_count or 0)
+        return instance.ratings.count()
+
+    def get_user_rating(self, instance: Resource) -> int | None:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not getattr(user, "is_authenticated", False):
+            return None
+        if hasattr(instance, "_user_rating"):
+            return int(instance._user_rating) if instance._user_rating is not None else None
+        return instance.ratings.filter(user=user).values_list("rating", flat=True).first()
 
     def get_is_saved(self, instance: Resource) -> bool:
         if hasattr(instance, "_is_saved"):
@@ -205,6 +237,9 @@ class VideoSerializer(serializers.ModelSerializer):
     original_url = serializers.URLField(read_only=True)
     uploader = PublicUserSerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
+    rating = serializers.SerializerMethodField()
+    rating_count = serializers.SerializerMethodField()
+    user_rating = serializers.SerializerMethodField()
     tag_ids = serializers.PrimaryKeyRelatedField(
         source="tags", many=True, queryset=Tag.objects.all(), write_only=True, required=False
     )
@@ -232,6 +267,9 @@ class VideoSerializer(serializers.ModelSerializer):
             "status",
             "created_at",
             "updated_at",
+            "rating",
+            "rating_count",
+            "user_rating",
         )
         read_only_fields = ("id", "slug", "uploader", "status", "created_at", "updated_at")
 
@@ -240,6 +278,31 @@ class VideoSerializer(serializers.ModelSerializer):
             return normalize_youtube_video_id(value, allow_raw_video_id=False)
         except ValidationError as error:
             raise serializers.ValidationError(error.messages) from error
+
+    @staticmethod
+    def _rating_average(instance: Video) -> float | None:
+        if hasattr(instance, "_rating_average"):
+            average = instance._rating_average
+        else:
+            average = instance.ratings.aggregate(value=Avg("rating"))["value"]
+        return round(float(average), 2) if average is not None else None
+
+    def get_rating(self, instance: Video) -> float | None:
+        return self._rating_average(instance)
+
+    def get_rating_count(self, instance: Video) -> int:
+        if hasattr(instance, "_rating_count"):
+            return int(instance._rating_count or 0)
+        return instance.ratings.count()
+
+    def get_user_rating(self, instance: Video) -> int | None:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not getattr(user, "is_authenticated", False):
+            return None
+        if hasattr(instance, "_user_rating"):
+            return int(instance._user_rating) if instance._user_rating is not None else None
+        return instance.ratings.filter(user=user).values_list("rating", flat=True).first()
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         if "original_url" in self.initial_data:

@@ -14,7 +14,7 @@ function SavedResourceItem({ resource }) {
         </div>
         <p className="mt-3 text-sm font-black text-[var(--color-text)]">by {resource.author}</p>
         <div className="mt-4 flex flex-wrap gap-3">
-          <Rating value="5.0" showValue={false} />
+          <Rating value={resource.rating} count={resource.ratingCount} showValue={false} />
           <span className="text-sm font-black text-[var(--color-text)]">{resource.views}</span>
         </div>
       </div>

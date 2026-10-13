@@ -210,6 +210,12 @@ RESOURCE_MAX_FILE_SIZE_BYTES = env.int('RESOURCE_MAX_FILE_SIZE_BYTES', default=2
 if RESOURCE_MAX_FILE_SIZE_BYTES <= 0:
     raise ImproperlyConfigured('RESOURCE_MAX_FILE_SIZE_BYTES must be greater than zero.')
 
+# Bayesian top-rated ordering uses five ratings as the minimum threshold before
+# an item's observed average outweighs the catalogue-wide average.
+RESOURCE_RATING_MIN_COUNT = env.int('RESOURCE_RATING_MIN_COUNT', default=5)
+if RESOURCE_RATING_MIN_COUNT <= 0:
+    raise ImproperlyConfigured('RESOURCE_RATING_MIN_COUNT must be greater than zero.')
+
 PROFILE_AVATAR_MAX_FILE_SIZE_BYTES = env.int('PROFILE_AVATAR_MAX_FILE_SIZE_BYTES', default=5 * 1024 * 1024)
 if PROFILE_AVATAR_MAX_FILE_SIZE_BYTES <= 0:
     raise ImproperlyConfigured('PROFILE_AVATAR_MAX_FILE_SIZE_BYTES must be greater than zero.')

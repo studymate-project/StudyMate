@@ -99,6 +99,8 @@ export function normalizeResource(resource) {
     author,
     academicLevel: resource.academic_level ?? null,
     rating: resource.rating ?? null,
+    ratingCount: resource.rating_count ?? 0,
+    userRating: resource.user_rating ?? null,
     views: resource.views ?? null,
     downloads: resource.downloads ?? null,
     saves: resource.saves ?? null,
@@ -253,4 +255,18 @@ export function trackResourceDownload(resourceId) {
 
 export function trackResourceView(resourceId) {
   return apiClient.post(`/resources/${resourceId}/view/`).then((response) => response.data)
+}
+
+export function saveResourceRating(resourceId, rating) {
+  return apiClient.post(`/resources/${resourceId}/rating/`, { rating }).then((response) => {
+    clearResourceListCache()
+    return response.data
+  })
+}
+
+export function deleteResourceRating(resourceId) {
+  return apiClient.delete(`/resources/${resourceId}/rating/`).then((response) => {
+    clearResourceListCache()
+    return response.data
+  })
 }

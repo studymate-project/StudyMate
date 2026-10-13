@@ -1,6 +1,7 @@
-import { FileText, Star } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { formatNumber, getUserById } from '../../data/dataHelpers'
+import Rating from '../common/Rating'
 
 function ResourceCard({ resource }) {
   const author = resource.author || getUserById(resource.authorId)
@@ -16,8 +17,7 @@ function ResourceCard({ resource }) {
       <h3 className="mt-5 min-h-[48px] text-lg font-black leading-tight text-white">{resource.title}</h3>
       <p className="mt-2 text-sm font-black text-[var(--color-text)]">by {author?.name}</p>
       <div className="mt-4 flex flex-wrap items-center gap-2 text-sm font-black">
-        <Star size={16} className="fill-[var(--color-star)] text-[var(--color-star)]" />
-        <span className="text-white">{resource.rating ?? 'N/A'}</span>
+        <Rating value={resource.rating} count={resource.ratingCount} />
         <span className="text-[var(--color-text)]">+</span>
         <span className="text-[var(--color-text)]">{resource.views == null ? 'Views unavailable' : `${formatNumber(resource.views)} Views`}</span>
       </div>

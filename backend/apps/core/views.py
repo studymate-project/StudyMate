@@ -356,7 +356,7 @@ def health(request: Request) -> Response:
 @extend_schema(
     summary="Search public and accessible study content",
     description=(
-        "Search resources, videos, and questions with PostgreSQL full-text and trigram ranking. "
+        "Search resources, videos, questions, and public users with PostgreSQL full-text and trigram ranking. "
         "Results are bounded and ordered deterministically. Authenticated owners may also find "
         "their own non-published content."
     ),

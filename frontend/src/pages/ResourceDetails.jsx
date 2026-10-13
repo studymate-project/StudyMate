@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getApiErrorMessage } from '../api'
-import { getResourceBySlug, trackResourceView } from '../api/resources'
+import { deleteResourceRating, getResourceBySlug, saveResourceRating, trackResourceView } from '../api/resources'
+import { useAuth } from '../auth/useAuth'
+import RatingControl from '../components/common/RatingControl'
 import Spinner from '../components/common/Spinner'
 import PdfPreview from '../components/resources/PdfPreview'
 import RelatedResourceList from '../components/resources/RelatedResourceList'
@@ -56,8 +58,13 @@ function ResourceDetails() {
 
 function ResourceDetailsView({ slug }) {
   const queryKey = slug || ''
+  const { status: authStatus } = useAuth()
   const [state, setState] = useState(initialState)
   const [downloadCount, setDownloadCount] = useState(null)
+  const [userRating, setUserRating] = useState(null)
+  const [ratingState, setRatingState] = useState('idle')
+  const [ratingError, setRatingError] = useState('')
+  const [ratingNotice, setRatingNotice] = useState('')
   const trackedViewId = useRef(null)
 
   useEffect(() => {
@@ -68,6 +75,7 @@ function ResourceDetailsView({ slug }) {
         if (!isCurrent) return
 
         setState({ resource, loading: false, error: null, queryKey })
+        setUserRating(resource.userRating ?? null)
         if (resource.id && trackedViewId.current !== resource.id) {
           trackedViewId.current = resource.id
           trackResourceView(resource.id).catch(() => {
@@ -89,6 +97,50 @@ function ResourceDetailsView({ slug }) {
   const loading = !isCurrentQuery || state.loading
   const resource = isCurrentQuery ? state.resource : null
   const error = isCurrentQuery ? state.error : null
+
+  const handleRatingChange = async (nextRating) => {
+    if (authStatus !== 'authenticated') {
+      setRatingNotice('Please sign in to submit a rating.')
+      return
+    }
+
+    setRatingState('loading')
+    setRatingError('')
+    setRatingNotice('')
+    try {
+      await saveResourceRating(resource.id, nextRating)
+      const refreshedResource = await getResourceBySlug(queryKey)
+      setState({ resource: refreshedResource, loading: false, error: null, queryKey })
+      setUserRating(nextRating)
+      setRatingNotice('Your rating was saved.')
+    } catch (requestError) {
+      setRatingError(getApiErrorMessage(requestError))
+    } finally {
+      setRatingState('idle')
+    }
+  }
+
+  const handleRatingDelete = async () => {
+    if (authStatus !== 'authenticated') {
+      setRatingNotice('Please sign in to manage your rating.')
+      return
+    }
+
+    setRatingState('loading')
+    setRatingError('')
+    setRatingNotice('')
+    try {
+      await deleteResourceRating(resource.id)
+      const refreshedResource = await getResourceBySlug(queryKey)
+      setState({ resource: refreshedResource, loading: false, error: null, queryKey })
+      setUserRating(null)
+      setRatingNotice('Your rating was removed.')
+    } catch (requestError) {
+      setRatingError(getApiErrorMessage(requestError))
+    } finally {
+      setRatingState('idle')
+    }
+  }
 
   if (loading) return <ResourceMessage loadingLabel="Loading resource" showBackLink={false} />
   if (error?.status === 404) return <ResourceMessage title="Resource Not Found" message="This resource may have been moved or removed." />
@@ -119,6 +171,16 @@ function ResourceDetailsView({ slug }) {
       <div className="mt-5 grid gap-9 lg:grid-cols-[minmax(0,1fr)_330px]">
         <div className="min-w-0 space-y-6">
           <ResourceHeader resource={resource} author={resource.author} onDownloadCountChange={setDownloadCount} />
+          <RatingControl
+            itemLabel="resource"
+            value={userRating}
+            authStatus={authStatus}
+            isSaving={ratingState === 'loading'}
+            error={ratingError}
+            notice={ratingNotice}
+            onChange={handleRatingChange}
+            onDelete={handleRatingDelete}
+          />
           <ResourceStats stats={stats} />
           <PdfPreview resourceSlug={resource.slug} resourceUrl={resource.resourceUrl} resourceType={resource.resourceType} />
           <TagList tags={resource.tags} />

@@ -85,7 +85,7 @@ function ResourceHeader({ resource, author, onDownloadCountChange }) {
           <p className="mt-3 text-sm font-black text-[var(--color-text)]">
             Uploaded by {author?.name || 'StudyMate member'}{resource.uploadedAt ? ` - ${resource.uploadedAt}` : ''}
           </p>
-          {resource.rating != null ? <Rating value={resource.rating} showValue={false} className="mt-3" /> : null}
+          <Rating value={resource.rating} count={resource.ratingCount} className="mt-3" />
         </div>
       </div>
 

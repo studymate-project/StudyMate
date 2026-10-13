@@ -1,14 +1,12 @@
-import { Bookmark, MessageCircle, Search, Video as VideoIcon } from 'lucide-react'
+import { Bookmark, MessageCircle, Search, UserRound, Video as VideoIcon } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Badge from '../components/common/Badge'
 import Button from '../components/common/Button'
-import SearchFilters from '../components/search/SearchFilters'
 import SearchSection from '../components/search/SearchSection'
 import Spinner from '../components/common/Spinner'
 import { getApiErrorMessage } from '../api'
 import { normalizeSearchQuery, searchContent, SEARCH_PAGE_SIZE } from '../api/search'
-import { searchFilters } from '../data/searchResults'
 import { getSearchResultRoute } from '../utils/searchUtils'
 
 const SEARCH_DEBOUNCE_MS = 350
@@ -16,6 +14,7 @@ const typeLabels = {
   resource: 'Resource',
   video: 'Video',
   question: 'Question',
+  user: 'User',
 }
 const metadataLabels = {
   resource_type: 'Type',
@@ -23,6 +22,7 @@ const metadataLabels = {
   topic: 'Topic',
   course: 'Course',
   semester: 'Semester',
+  username: 'Username',
 }
 
 function isCanceledRequest(error) {
@@ -40,6 +40,7 @@ function formatMetadataValue(value) {
 function ResultTypeIcon({ type }) {
   if (type === 'video') return <VideoIcon size={16} aria-hidden="true" />
   if (type === 'question') return <MessageCircle size={16} aria-hidden="true" />
+  if (type === 'user') return <UserRound size={16} aria-hidden="true" />
   return <Bookmark size={16} aria-hidden="true" />
 }
 
@@ -80,7 +81,6 @@ function SearchResultCard({ result }) {
 function SearchResults() {
   const [searchParams, setSearchParams] = useSearchParams()
   const urlQuery = normalizeSearchQuery(searchParams.get('q'))
-  const [filtersOpen, setFiltersOpen] = useState(false)
   const queryInput = useRef(null)
   const debounceTimer = useRef(null)
 
@@ -121,14 +121,14 @@ function SearchResults() {
         <div className="mx-auto max-w-[1260px]">
           <form onSubmit={submit} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_110px_100px]">
             <label className="relative min-w-0">
-              <span className="sr-only">Search resources, videos, and questions</span>
+              <span className="sr-only">Search resources, videos, questions, and users</span>
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text)]" size={20} />
               <input
                 ref={queryInput}
                 type="search"
                 defaultValue={urlQuery}
                 onChange={handleQueryChange}
-                placeholder="Search resources, videos, and questions"
+                placeholder="Search resources, videos, questions, and users"
                 className="h-14 w-full border-2 border-[var(--color-border)] bg-[var(--color-surface)] pl-12 pr-4 text-base font-black text-white outline-none focus:border-[#58a7df]"
               />
             </label>
@@ -144,19 +144,10 @@ function SearchResults() {
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-[1260px] lg:grid-cols-[260px_minmax(0,1fr)]">
-        <div className="border-b border-[var(--color-border)] p-4 lg:hidden">
-          <button type="button" onClick={() => setFiltersOpen((open) => !open)} className="h-11 w-full border-2 border-[var(--color-border-strong)] text-base font-black text-white">
-            {filtersOpen ? 'Hide Filters' : 'Show Filters'}
-          </button>
-        </div>
-        <div className={filtersOpen ? 'block' : 'hidden lg:block'}><SearchFilters groups={searchFilters} /></div>
-
+      <div className="mx-auto max-w-[1260px]">
         <section className="min-w-0 px-5 py-7 sm:px-8">
-          <SearchSection title="Results" showViewAll={false}>
-            {!urlQuery && <div className="border-2 border-dashed border-[var(--color-border)] px-5 py-12 text-center text-sm font-black text-[var(--color-text)]">Enter a search term to find study resources, videos, and questions.</div>}
-            {urlQuery && <SearchResultContent key={urlQuery} query={urlQuery} />}
-          </SearchSection>
+          {!urlQuery && <div className="border-2 border-dashed border-[var(--color-border)] px-5 py-12 text-center text-sm font-black text-[var(--color-text)]">Enter a search term to find study resources, videos, questions, or users.</div>}
+          {urlQuery && <SearchResultContent key={urlQuery} query={urlQuery} />}
         </section>
       </div>
     </div>
@@ -241,11 +232,34 @@ function SearchResultContent({ query }) {
       </div>
     )
   }
-  if (!results.length) return <div className="border-2 border-dashed border-[var(--color-border)] px-5 py-12 text-center text-sm font-black text-[var(--color-text)]">No resources, videos, or questions matched "{query}".</div>
+  if (!results.length) return <div className="border-2 border-dashed border-[var(--color-border)] px-5 py-12 text-center text-sm font-black text-[var(--color-text)]">No resources, videos, questions, or users matched "{query}".</div>
+
+  const sections = [
+    { type: 'resource', title: 'Resources', viewAllTo: `/explore?search=${encodeURIComponent(query)}` },
+    { type: 'video', title: 'Videos' },
+    { type: 'question', title: 'Questions', viewAllTo: '/community' },
+    { type: 'user', title: 'Users' },
+  ]
 
   return (
     <>
-      {results.map((result) => <SearchResultCard key={resultKey(result)} result={result} />)}
+      <p className="mb-6 text-sm font-black text-[var(--color-text)]" aria-live="polite">
+        Showing {results.length}{hasMore ? '+' : ''} result{results.length === 1 ? '' : 's'}
+      </p>
+      {sections.map((section) => {
+        const sectionResults = results.filter((result) => result.type === section.type)
+        if (!sectionResults.length) return null
+        return (
+          <SearchSection
+            key={section.type}
+            title={section.title}
+            showViewAll={Boolean(section.viewAllTo)}
+            viewAllTo={section.viewAllTo}
+          >
+            {sectionResults.map((result) => <SearchResultCard key={resultKey(result)} result={result} />)}
+          </SearchSection>
+        )
+      })}
       {hasMore && (
         <div className="flex justify-center pt-3">
           <Button type="button" variant="secondary" onClick={loadMore} disabled={loadingMore}>

@@ -1,7 +1,8 @@
-import { FileText, Star } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { formatNumber, getUserById } from '../../data/dataHelpers'
 import Button from '../common/Button'
+import Rating from '../common/Rating'
 
 function ResourceListItem({ resource }) {
   const author = resource.author || getUserById(resource.authorId)
@@ -24,10 +25,7 @@ function ResourceListItem({ resource }) {
       </Link>
 
       <div className="flex flex-wrap items-center gap-4 text-sm font-black sm:justify-end">
-        <span className="inline-flex items-center gap-1 text-white">
-          <Star size={15} className="fill-[var(--color-star)] text-[var(--color-star)]" />
-          {resource.rating ?? 'N/A'}
-        </span>
+        <Rating value={resource.rating} count={resource.ratingCount} />
         <span className="text-[var(--color-text)]">{formatNumber(resource.downloads ?? 0)} Downloads</span>
       </div>
 

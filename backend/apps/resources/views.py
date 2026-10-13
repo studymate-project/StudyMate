@@ -1,5 +1,21 @@
-from django.db.models import Case, Count, Exists, IntegerField, OuterRef, Q, Value, When
+from django.conf import settings
+from django.db.models import (
+    Avg,
+    Case,
+    Count,
+    Exists,
+    ExpressionWrapper,
+    F,
+    FloatField,
+    IntegerField,
+    OuterRef,
+    Q,
+    Subquery,
+    Value,
+    When,
+)
 from django.db import transaction
+from django.db.models.functions import Cast, Coalesce, Ln
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -19,12 +35,61 @@ from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
 from apps.core.permissions import IsResourceOwnerOrReadOnly, IsVideoOwnerOrReadOnly
 from apps.core.schema import BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHENTICATED
-from apps.interactions.models import ResourceUpvote, SavedResource
-from apps.interactions.serializers import SavedResourceSerializer
+from apps.interactions.models import ResourceRating, ResourceUpvote, SavedResource
+from apps.interactions.serializers import ResourceRatingSerializer, SavedResourceSerializer
 
 from .models import PublicationStatus, Resource, ResourceDownload, ResourceView, Video
 from .serializers import ResourceSerializer, VideoSerializer
 from .services.cloudinary import discard_cloudinary_reference, is_cloudinary_reference
+
+
+POPULARITY_VIEW_WEIGHT = 0.4
+POPULARITY_SAVE_WEIGHT = 0.3
+POPULARITY_UPVOTE_WEIGHT = 0.3
+
+
+def _rating_annotations(target_field: str) -> dict[str, object]:
+    rating_queryset = ResourceRating.objects.filter(
+        **{f"{target_field}_id": OuterRef("pk")}
+    ).order_by().values(target_field)
+    return {
+        "_rating_count": Coalesce(
+            Subquery(
+                rating_queryset.annotate(value=Count("pk")).values("value")[:1],
+                output_field=IntegerField(),
+            ),
+            Value(0),
+        ),
+        "_rating_average": Subquery(
+            rating_queryset.annotate(value=Avg("rating")).values("value")[:1],
+            output_field=FloatField(),
+        ),
+    }
+
+
+def _user_rating_annotation(target_field: str, user) -> dict[str, object]:
+    if not user.is_authenticated:
+        return {}
+
+    return {
+        "_user_rating": Subquery(
+            ResourceRating.objects.filter(
+                **{f"{target_field}_id": OuterRef("pk")},
+                user=user,
+            ).order_by().values("rating")[:1],
+            output_field=IntegerField(),
+        ),
+    }
+
+
+def _resource_metric_annotations() -> dict[str, object]:
+    return {
+        "_view_count": Count("view_events", distinct=True),
+        "_download_count": Count("download_events", distinct=True),
+        "_save_count": Count("saved_by", distinct=True),
+        "_upvote_count": Count("upvotes", distinct=True),
+        **_rating_annotations("resource"),
+    }
 
 
 RESOURCE_LIST_PARAMETERS = [
@@ -104,6 +169,14 @@ RESOURCE_DOWNLOAD_RESPONSE = inline_serializer(
         "downloads": serializers.IntegerField(read_only=True),
     },
 )
+RESOURCE_RATING_DELETE_RESPONSE = inline_serializer(
+    "ResourceRatingDeleteResponse",
+    fields={
+        "rated": serializers.BooleanField(read_only=True),
+        "resource": serializers.IntegerField(read_only=True, required=False),
+        "video": serializers.IntegerField(read_only=True, required=False),
+    },
+)
 
 
 @extend_schema_view(
@@ -155,10 +228,8 @@ class ResourceViewSet(ModelViewSet):
 
     def get_queryset(self):
         queryset = Resource.objects.select_related("uploader", "academic_level").prefetch_related("tags").annotate(
-            _view_count=Count("view_events", distinct=True),
-            _download_count=Count("download_events", distinct=True),
-            _save_count=Count("saved_by", distinct=True),
-            _upvote_count=Count("upvotes", distinct=True),
+            **_resource_metric_annotations(),
+            **_user_rating_annotation("resource", self.request.user),
         ).order_by("-created_at", "-pk")
         if self.request.user.is_authenticated:
             queryset = queryset.annotate(
@@ -186,24 +257,70 @@ class ResourceViewSet(ModelViewSet):
             "most_downloaded": "most_downloaded",
         }.get(value.strip().casefold())
 
+    def _rating_prior(self) -> float:
+        if self.request.user.is_authenticated:
+            visible_resources = Resource.objects.filter(
+                Q(status=PublicationStatus.PUBLISHED) | Q(uploader=self.request.user)
+            )
+        else:
+            visible_resources = Resource.objects.filter(status=PublicationStatus.PUBLISHED)
+        prior = ResourceRating.objects.filter(
+            resource_id__in=visible_resources.values("pk")
+        ).aggregate(value=Avg("rating"))["value"]
+        return float(prior) if prior is not None else 0.0
+
     @staticmethod
-    def _apply_ordering(queryset, ordering):
+    def _log_count(annotation_name: str):
+        return Ln(Cast(F(annotation_name), FloatField()) + Value(1.0))
+
+    def _apply_ordering(self, queryset, ordering):
         if ordering is None:
             return queryset.order_by("-created_at", "-pk")
         if ordering == "latest":
             return queryset.order_by("-created_at", "-pk")
         if ordering == "popular":
-            return queryset.annotate(_view_count=Count("view_events", distinct=True)).order_by(
-                "-_view_count", "-created_at", "-pk"
+            # Log-scaled counts prevent high-volume views from overwhelming saves
+            # and upvotes. The weights sum to one and are intentionally stable.
+            popularity_score = ExpressionWrapper(
+                Value(POPULARITY_VIEW_WEIGHT, output_field=FloatField()) * self._log_count("_view_count")
+                + Value(POPULARITY_SAVE_WEIGHT, output_field=FloatField()) * self._log_count("_save_count")
+                + Value(POPULARITY_UPVOTE_WEIGHT, output_field=FloatField()) * self._log_count("_upvote_count"),
+                output_field=FloatField(),
+            )
+            return queryset.annotate(_popularity_score=popularity_score).order_by(
+                "-_popularity_score",
+                "-_view_count",
+                "-_save_count",
+                "-_upvote_count",
+                "-created_at",
+                "-pk",
             )
         if ordering == "top_rated":
-            return queryset.annotate(_upvote_count=Count("upvotes", distinct=True)).order_by(
-                "-_upvote_count", "-created_at", "-pk"
+            prior = Value(self._rating_prior(), output_field=FloatField())
+            minimum_count = Value(float(settings.RESOURCE_RATING_MIN_COUNT), output_field=FloatField())
+            rating_count = Cast(F("_rating_count"), FloatField())
+            average_rating = Coalesce(F("_rating_average"), prior)
+            bayesian_score = Case(
+                When(
+                    _rating_count__gt=0,
+                    then=ExpressionWrapper(
+                        (rating_count / (rating_count + minimum_count)) * average_rating
+                        + (minimum_count / (rating_count + minimum_count)) * prior,
+                        output_field=FloatField(),
+                    ),
+                ),
+                default=prior,
+                output_field=FloatField(),
+            )
+            return queryset.annotate(_bayesian_rating_score=bayesian_score).order_by(
+                "-_bayesian_rating_score",
+                "-_rating_count",
+                "-_rating_average",
+                "-created_at",
+                "-pk",
             )
         if ordering == "most_downloaded":
-            return queryset.annotate(_download_count=Count("download_events", distinct=True)).order_by(
-                "-_download_count", "-created_at", "-pk"
-            )
+            return queryset.order_by("-_download_count", "-created_at", "-pk")
         return queryset
 
     def filter_queryset(self, queryset):
@@ -348,10 +465,8 @@ class SavedResourceListView(ListAPIView):
 
     def get_queryset(self):
         queryset = Resource.objects.select_related("uploader", "academic_level").prefetch_related("tags").annotate(
-            _view_count=Count("view_events", distinct=True),
-            _download_count=Count("download_events", distinct=True),
-            _save_count=Count("saved_by", distinct=True),
-            _upvote_count=Count("upvotes", distinct=True),
+            **_resource_metric_annotations(),
+            **_user_rating_annotation("resource", self.request.user),
             _is_saved=Value(True),
         ).order_by("-created_at", "-pk")
         return queryset.filter(
@@ -386,7 +501,10 @@ class VideoViewSet(ListModelMixin, RetrieveModelMixin, CreateModelMixin, Generic
         return super().get_throttles()
 
     def get_queryset(self):
-        queryset = Video.objects.select_related("uploader", "academic_level").prefetch_related("tags")
+        queryset = Video.objects.select_related("uploader", "academic_level").prefetch_related("tags").annotate(
+            **_rating_annotations("video"),
+            **_user_rating_annotation("video", self.request.user),
+        )
         if self.request.user.is_authenticated:
             return queryset.filter(Q(status=PublicationStatus.PUBLISHED) | Q(uploader=self.request.user))
         return queryset.filter(status=PublicationStatus.PUBLISHED)
@@ -414,6 +532,57 @@ class ResourceInteractionView(APIView):
                 Q(status=PublicationStatus.PUBLISHED) | Q(uploader=request.user)
             )
         return get_object_or_404(queryset, pk=resource_id)
+
+
+class ResourceRatingView(ResourceInteractionView):
+    """Create, update, or remove the authenticated user's resource rating."""
+
+    throttle_scope = "interaction_write"
+
+    def _save_rating(self, request, resource_id, *, partial=False):
+        resource = self.get_resource(request, resource_id)
+        existing = ResourceRating.objects.filter(user=request.user, resource=resource).first()
+        serializer = ResourceRatingSerializer(
+            instance=existing,
+            data=request.data,
+            partial=partial and existing is not None,
+        )
+        serializer.is_valid(raise_exception=True)
+        rating = serializer.save(user=request.user, resource=resource)
+        return Response(
+            ResourceRatingSerializer(rating).data,
+            status=HTTP_200_OK if existing else HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        request=ResourceRatingSerializer,
+        responses={201: ResourceRatingSerializer, 200: ResourceRatingSerializer, 400: BAD_REQUEST, 401: UNAUTHENTICATED, 404: NOT_FOUND},
+    )
+    def post(self, request, resource_id):
+        return self._save_rating(request, resource_id)
+
+    @extend_schema(
+        request=ResourceRatingSerializer,
+        responses={200: ResourceRatingSerializer, 400: BAD_REQUEST, 401: UNAUTHENTICATED, 404: NOT_FOUND},
+    )
+    def put(self, request, resource_id):
+        return self._save_rating(request, resource_id)
+
+    @extend_schema(
+        request=ResourceRatingSerializer,
+        responses={200: ResourceRatingSerializer, 400: BAD_REQUEST, 401: UNAUTHENTICATED, 404: NOT_FOUND},
+    )
+    def patch(self, request, resource_id):
+        return self._save_rating(request, resource_id, partial=True)
+
+    @extend_schema(
+        request=None,
+        responses={200: RESOURCE_RATING_DELETE_RESPONSE, 401: UNAUTHENTICATED, 404: NOT_FOUND},
+    )
+    def delete(self, request, resource_id):
+        resource = self.get_resource(request, resource_id)
+        ResourceRating.objects.filter(user=request.user, resource=resource).delete()
+        return Response({"rated": False, "resource": resource.pk}, status=HTTP_200_OK)
 
 
 class ResourceSaveView(ResourceInteractionView):
@@ -492,6 +661,66 @@ class ResourceUpvoteView(ResourceInteractionView):
             },
             status=HTTP_200_OK,
         )
+
+
+class VideoRatingView(APIView):
+    """Create, update, or remove the authenticated user's video rating."""
+
+    permission_classes = (IsAuthenticated,)
+    throttle_scope = "interaction_write"
+
+    def get_video(self, request, video_slug):
+        queryset = Video.objects.filter(status=PublicationStatus.PUBLISHED)
+        if request.user.is_authenticated:
+            queryset = Video.objects.filter(
+                Q(status=PublicationStatus.PUBLISHED) | Q(uploader=request.user)
+            )
+        return get_object_or_404(queryset, slug=video_slug)
+
+    def _save_rating(self, request, video_slug, *, partial=False):
+        video = self.get_video(request, video_slug)
+        existing = ResourceRating.objects.filter(user=request.user, video=video).first()
+        serializer = ResourceRatingSerializer(
+            instance=existing,
+            data=request.data,
+            partial=partial and existing is not None,
+        )
+        serializer.is_valid(raise_exception=True)
+        rating = serializer.save(user=request.user, video=video)
+        return Response(
+            ResourceRatingSerializer(rating).data,
+            status=HTTP_200_OK if existing else HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        request=ResourceRatingSerializer,
+        responses={201: ResourceRatingSerializer, 200: ResourceRatingSerializer, 400: BAD_REQUEST, 401: UNAUTHENTICATED, 404: NOT_FOUND},
+    )
+    def post(self, request, video_slug):
+        return self._save_rating(request, video_slug)
+
+    @extend_schema(
+        request=ResourceRatingSerializer,
+        responses={200: ResourceRatingSerializer, 400: BAD_REQUEST, 401: UNAUTHENTICATED, 404: NOT_FOUND},
+    )
+    def put(self, request, video_slug):
+        return self._save_rating(request, video_slug)
+
+    @extend_schema(
+        request=ResourceRatingSerializer,
+        responses={200: ResourceRatingSerializer, 400: BAD_REQUEST, 401: UNAUTHENTICATED, 404: NOT_FOUND},
+    )
+    def patch(self, request, video_slug):
+        return self._save_rating(request, video_slug, partial=True)
+
+    @extend_schema(
+        request=None,
+        responses={200: RESOURCE_RATING_DELETE_RESPONSE, 401: UNAUTHENTICATED, 404: NOT_FOUND},
+    )
+    def delete(self, request, video_slug):
+        video = self.get_video(request, video_slug)
+        ResourceRating.objects.filter(user=request.user, video=video).delete()
+        return Response({"rated": False, "video": video.pk}, status=HTTP_200_OK)
 
 
 class ResourceEventView(ResourceInteractionView):

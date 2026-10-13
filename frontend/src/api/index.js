@@ -10,12 +10,14 @@ export {
   listResources,
   listSavedResources,
   normalizeResource,
+  deleteResourceRating,
   saveResource,
+  saveResourceRating,
   trackResourceDownload,
   trackResourceView,
   unsaveResource,
 } from './resources'
-export { createVideo, getVideoBySlug, normalizeVideo } from './videos'
+export { createVideo, deleteVideoRating, getVideoBySlug, normalizeVideo, saveVideoRating } from './videos'
 export { normalizeSearchQuery, searchContent, SEARCH_MAX_QUERY_LENGTH, SEARCH_PAGE_SIZE } from './search'
 export {
   followProfile,

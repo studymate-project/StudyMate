@@ -18,7 +18,7 @@ from apps.community.serializers import AnswerSerializer, QuestionSerializer
 from apps.core.pagination import StudyMatePagination
 from apps.education.models import AcademicLevel, Course, EducationBackground, Interest, StudentInterest
 from apps.education.serializers import AcademicLevelSerializer, CourseSerializer, EducationBackgroundSerializer, InterestSerializer, StudentInterestSerializer
-from apps.interactions.models import AnswerUpvote, QuestionUpvote, ResourceUpvote, SavedResource, UserFollow
+from apps.interactions.models import AnswerUpvote, QuestionUpvote, ResourceRating, ResourceUpvote, SavedResource, UserFollow
 from apps.interactions.serializers import AnswerUpvoteSerializer, QuestionUpvoteSerializer, ResourceUpvoteSerializer, SavedResourceSerializer
 from apps.notifications.models import Notification
 from apps.notifications.serializers import NotificationSerializer
@@ -1862,18 +1862,209 @@ class APIViewTests(TestCase):
         result_ids = [item["id"] for item in response.data["results"]]
         self.assertLess(result_ids.index(more_popular.pk), result_ids.index(less_popular.pk))
 
-    def test_resource_ordering_top_rated_uses_existing_upvotes(self):
+    def test_resource_list_popular_returns_rating_fields(self):
+        self.create_published_resource(title="Popular list regression")
+
+        response = self.client.get("/api/resources/?page_size=20&ordering=popular")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("rating", response.data["results"][0])
+        self.assertIn("rating_count", response.data["results"][0])
+
+    def test_resource_ordering_top_rated_uses_bayesian_star_ratings(self):
         lower_rated = self.create_published_resource(title="Lower rated")
         higher_rated = self.create_published_resource(title="Higher rated")
-        ResourceUpvote.objects.create(resource=lower_rated, user=self.user)
-        ResourceUpvote.objects.create(resource=higher_rated, user=self.user)
-        ResourceUpvote.objects.create(resource=higher_rated, user=self.other_user)
+        ResourceRating.objects.create(resource=lower_rated, user=self.user, rating=1)
+        ResourceRating.objects.create(resource=higher_rated, user=self.user, rating=5)
+        ResourceRating.objects.create(resource=higher_rated, user=self.other_user, rating=5)
 
         response = self.client.get("/api/resources/?ordering=top_rated")
 
         self.assertEqual(response.status_code, 200)
         result_ids = [item["id"] for item in response.data["results"]]
         self.assertLess(result_ids.index(higher_rated.pk), result_ids.index(lower_rated.pk))
+
+    def test_resource_popularity_balances_views_saves_and_upvotes(self):
+        view_heavy = self.create_published_resource(title="View heavy")
+        interaction_heavy = self.create_published_resource(title="Interaction heavy")
+        extra_users = [
+            User.objects.create_user(username=f"popularity-user-{index}", password="not-used-in-test")
+            for index in range(4)
+        ]
+        ResourceView.objects.create(resource=view_heavy, user=self.user)
+        for user in [self.user, self.other_user, *extra_users]:
+            SavedResource.objects.create(resource=interaction_heavy, user=user)
+            ResourceUpvote.objects.create(resource=interaction_heavy, user=user)
+        ResourceView.objects.create(resource=interaction_heavy, user=self.user)
+
+        response = self.client.get("/api/resources/?ordering=popular")
+
+        self.assertEqual(response.status_code, 200)
+        result_ids = [item["id"] for item in response.data["results"]]
+        self.assertLess(result_ids.index(interaction_heavy.pk), result_ids.index(view_heavy.pk))
+
+    def test_top_rated_uses_deterministic_ties_with_filters_and_pagination(self):
+        first = self.create_published_resource(title="Ranked first", subject="Ranking")
+        second = self.create_published_resource(title="Ranked second", subject="Ranking")
+        outside = self.create_published_resource(title="Outside ranking", subject="Other")
+        now = timezone.now()
+        Resource.objects.filter(pk__in=(first.pk, second.pk)).update(created_at=now)
+        ResourceRating.objects.create(resource=first, user=self.user, rating=4)
+        ResourceRating.objects.create(resource=second, user=self.user, rating=4)
+        ResourceRating.objects.create(resource=outside, user=self.user, rating=5)
+
+        response = self.client.get(
+            "/api/resources/",
+            {"subject": "ranking", "ordering": "top_rated", "page_size": 1},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(response.data["results"][0]["id"], second.pk)
+
+    def test_rating_aggregates_are_not_duplicated_by_tag_joins(self):
+        resource = self.create_published_resource(title="Tagged rated resource")
+        tag = Tag.objects.create(name="Rating aggregate", slug="rating-aggregate")
+        resource.tags.add(tag)
+        ResourceRating.objects.create(resource=resource, user=self.user, rating=2)
+        ResourceRating.objects.create(resource=resource, user=self.other_user, rating=4)
+
+        response = self.client.get("/api/resources/?tags=rating-aggregate")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(item for item in response.data["results"] if item["id"] == resource.pk)
+        self.assertEqual(result["rating"], 3.0)
+        self.assertEqual(result["rating_count"], 2)
+
+    def test_resource_rating_lifecycle_and_aggregates(self):
+        rating_url = f"/api/resources/{self.resource.pk}/rating/"
+        self.client.force_authenticate(user=self.user)
+
+        create_response = self.client.post(rating_url, {"rating": 4}, format="json")
+        self.assertEqual(create_response.status_code, 201)
+        self.assertEqual(create_response.data["rating"], 4)
+
+        detail_response = self.client.get(f"/api/resources/{self.resource.slug}/")
+        self.assertEqual(detail_response.data["rating"], 4.0)
+        self.assertEqual(detail_response.data["rating_count"], 1)
+
+        update_response = self.client.patch(rating_url, {"rating": 5}, format="json")
+        self.assertEqual(update_response.status_code, 200)
+        self.assertEqual(ResourceRating.objects.filter(user=self.user, resource=self.resource).count(), 1)
+
+        self.client.force_authenticate(user=self.other_user)
+        peer_response = self.client.post(rating_url, {"rating": 3}, format="json")
+        self.assertEqual(peer_response.status_code, 201)
+        detail_response = self.client.get(f"/api/resources/{self.resource.slug}/")
+        self.assertEqual(detail_response.data["rating"], 4.0)
+        self.assertEqual(detail_response.data["rating_count"], 2)
+
+        self.client.delete(rating_url)
+        self.client.force_authenticate(user=self.user)
+        self.client.delete(rating_url)
+        detail_response = self.client.get(f"/api/resources/{self.resource.slug}/")
+        self.assertIsNone(detail_response.data["rating"])
+        self.assertEqual(detail_response.data["rating_count"], 0)
+
+    def test_resource_rating_supports_external_links_and_video_items(self):
+        link = self.create_published_resource(
+            title="External resource",
+            resource_type=Resource.ResourceType.LINK,
+            external_url="https://example.com/study-guide",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        link_response = self.client.post(f"/api/resources/{link.pk}/rating/", {"rating": 5}, format="json")
+        video_rating_url = f"/api/videos/{self.video.slug}/rating/"
+        video_response = self.client.post(video_rating_url, {"rating": 4}, format="json")
+        video_update_response = self.client.patch(video_rating_url, {"rating": 5}, format="json")
+
+        self.assertEqual(link_response.status_code, 201)
+        self.assertEqual(video_response.status_code, 201)
+        self.assertEqual(video_update_response.status_code, 200)
+        resource_response = self.client.get(f"/api/resources/{link.slug}/")
+        video_detail_response = self.client.get(f"/api/videos/{self.video.slug}/")
+        self.assertEqual(resource_response.data["rating"], 5.0)
+        self.assertEqual(resource_response.data["rating_count"], 1)
+        self.assertEqual(video_detail_response.data["rating"], 5.0)
+        self.assertEqual(video_detail_response.data["rating_count"], 1)
+
+        video_delete_response = self.client.delete(video_rating_url)
+        self.assertEqual(video_delete_response.status_code, 200)
+        video_detail_response = self.client.get(f"/api/videos/{self.video.slug}/")
+        self.assertIsNone(video_detail_response.data["rating"])
+        self.assertEqual(video_detail_response.data["rating_count"], 0)
+
+    def test_user_rating_is_scoped_to_authenticated_request_user(self):
+        ResourceRating.objects.create(resource=self.resource, user=self.user, rating=2)
+        ResourceRating.objects.create(resource=self.resource, user=self.other_user, rating=5)
+        ResourceRating.objects.create(video=self.video, user=self.user, rating=3)
+        ResourceRating.objects.create(video=self.video, user=self.other_user, rating=4)
+        self.client.force_authenticate(user=self.user)
+
+        own_resource_response = self.client.get(f"/api/resources/{self.resource.slug}/")
+        own_video_response = self.client.get(f"/api/videos/{self.video.slug}/")
+
+        self.assertEqual(own_resource_response.data["user_rating"], 2)
+        self.assertEqual(own_video_response.data["user_rating"], 3)
+
+        self.client.force_authenticate(user=self.other_user)
+        other_resource_response = self.client.get(f"/api/resources/{self.resource.slug}/")
+        other_video_response = self.client.get(f"/api/videos/{self.video.slug}/")
+        self.assertEqual(other_resource_response.data["user_rating"], 5)
+        self.assertEqual(other_video_response.data["user_rating"], 4)
+
+        self.client.logout()
+        anonymous_response = self.client.get(f"/api/resources/{self.resource.slug}/")
+        self.assertIsNone(anonymous_response.data["user_rating"])
+
+    def test_resource_rating_validation_permissions_and_database_constraints(self):
+        rating_url = f"/api/resources/{self.resource.pk}/rating/"
+        invalid_values = (0, 6)
+        self.client.force_authenticate(user=self.user)
+        self.assertEqual(self.client.patch(rating_url, {}, format="json").status_code, 400)
+        for value in invalid_values:
+            with self.subTest(value=value):
+                response = self.client.post(rating_url, {"rating": value}, format="json")
+                self.assertEqual(response.status_code, 400)
+
+        self.client.logout()
+        self.assertEqual(self.client.post(rating_url, {"rating": 3}, format="json").status_code, 401)
+
+        draft = Resource.objects.create(
+            title="Draft rating target",
+            uploader=self.user,
+            subject="Physics",
+            resource_type=Resource.ResourceType.NOTES,
+            status=PublicationStatus.DRAFT,
+        )
+        self.client.force_authenticate(user=self.other_user)
+        self.assertEqual(
+            self.client.post(f"/api/resources/{draft.pk}/rating/", {"rating": 3}, format="json").status_code,
+            404,
+        )
+        self.client.force_authenticate(user=self.user)
+        self.assertEqual(
+            self.client.post(f"/api/resources/{draft.pk}/rating/", {"rating": 3}, format="json").status_code,
+            201,
+        )
+
+        ResourceRating.objects.create(user=self.user, resource=self.resource, rating=3)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                ResourceRating.objects.create(user=self.user, resource=self.resource, rating=3)
+        invalid_target = self.create_published_resource(title="Invalid rating target")
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                ResourceRating.objects.create(
+                    user=self.other_user,
+                    resource=invalid_target,
+                    video=self.video,
+                    rating=3,
+                )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                ResourceRating.objects.create(user=self.other_user, video=self.video, rating=6)
 
     def test_resource_ordering_most_downloaded_uses_download_events(self):
         less_downloaded = self.create_published_resource(title="Less downloaded")

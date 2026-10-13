@@ -1,9 +1,12 @@
-import { Bookmark, Eye, MessageSquare, Share2, Star, ThumbsUp, UserRound } from 'lucide-react'
+import { Bookmark, Eye, MessageSquare, Share2, ThumbsUp, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getApiErrorMessage } from '../api'
-import { getVideoBySlug } from '../api/videos'
+import { deleteVideoRating, getVideoBySlug, saveVideoRating } from '../api/videos'
+import { useAuth } from '../auth/useAuth'
 import Button from '../components/common/Button'
+import Rating from '../components/common/Rating'
+import RatingControl from '../components/common/RatingControl'
 import Spinner from '../components/common/Spinner'
 import YouTubePlayer from '../components/video/YouTubePlayer'
 
@@ -26,9 +29,14 @@ function VideoMessage({ title, message, showBackLink = true, loadingLabel = '' }
 
 function VideoDetailsView({ slug }) {
   const queryKey = slug || ''
+  const { status: authStatus } = useAuth()
   const [state, setState] = useState(initialState)
   const [upvoted, setUpvoted] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [userRating, setUserRating] = useState(null)
+  const [ratingState, setRatingState] = useState('idle')
+  const [ratingError, setRatingError] = useState('')
+  const [ratingNotice, setRatingNotice] = useState('')
   const [comments, setComments] = useState([])
   const [comment, setComment] = useState('')
 
@@ -37,7 +45,10 @@ function VideoDetailsView({ slug }) {
 
     getVideoBySlug(queryKey).then(
       (video) => {
-        if (isCurrent) setState({ video, loading: false, error: null, queryKey })
+        if (isCurrent) {
+          setState({ video, loading: false, error: null, queryKey })
+          setUserRating(video.userRating ?? null)
+        }
       },
       (error) => {
         if (isCurrent) setState({ video: null, loading: false, error, queryKey })
@@ -54,6 +65,50 @@ function VideoDetailsView({ slug }) {
   const video = isCurrentQuery ? state.video : null
   const error = isCurrentQuery ? state.error : null
 
+  const handleRatingChange = async (nextRating) => {
+    if (authStatus !== 'authenticated') {
+      setRatingNotice('Please sign in to submit a rating.')
+      return
+    }
+
+    setRatingState('loading')
+    setRatingError('')
+    setRatingNotice('')
+    try {
+      await saveVideoRating(queryKey, nextRating)
+      const refreshedVideo = await getVideoBySlug(queryKey)
+      setState({ video: refreshedVideo, loading: false, error: null, queryKey })
+      setUserRating(nextRating)
+      setRatingNotice('Your rating was saved.')
+    } catch (requestError) {
+      setRatingError(getApiErrorMessage(requestError))
+    } finally {
+      setRatingState('idle')
+    }
+  }
+
+  const handleRatingDelete = async () => {
+    if (authStatus !== 'authenticated') {
+      setRatingNotice('Please sign in to manage your rating.')
+      return
+    }
+
+    setRatingState('loading')
+    setRatingError('')
+    setRatingNotice('')
+    try {
+      await deleteVideoRating(queryKey)
+      const refreshedVideo = await getVideoBySlug(queryKey)
+      setState({ video: refreshedVideo, loading: false, error: null, queryKey })
+      setUserRating(null)
+      setRatingNotice('Your rating was removed.')
+    } catch (requestError) {
+      setRatingError(getApiErrorMessage(requestError))
+    } finally {
+      setRatingState('idle')
+    }
+  }
+
   if (loading) return <VideoMessage loadingLabel="Loading video" showBackLink={false} />
   if (error?.status === 404) return <VideoMessage title="Video Not Found" message="This video may have been moved or removed." />
   if (error) return <VideoMessage title="Unable to Load Video" message={getApiErrorMessage(error)} />
@@ -67,7 +122,6 @@ function VideoDetailsView({ slug }) {
 
   const stats = [
     video.views != null ? { icon: Eye, value: `${formatNumber(video.views)} Views` } : null,
-    video.rating != null ? { icon: Star, value: video.rating } : null,
     video.upvotes != null ? { icon: ThumbsUp, value: `${formatNumber(video.upvotes)} Upvotes` } : null,
   ].filter(Boolean)
 
@@ -84,7 +138,8 @@ function VideoDetailsView({ slug }) {
           <section className="mt-7 border-b-2 border-[var(--color-border-strong)] pb-5">
             <h2 className="text-2xl font-black text-white">{video.title}</h2>
             <div className="mt-4 flex flex-wrap items-center gap-5 text-sm font-black text-[var(--color-text)]">
-              {stats.map(({ icon: Icon, value }) => <span key={value} className="inline-flex items-center gap-2"><Icon size={16} className={Icon === Star ? 'fill-[var(--color-star)] text-[var(--color-star)]' : ''} />{value}</span>)}
+              {stats.map(({ icon: Icon, value }) => <span key={value} className="inline-flex items-center gap-2"><Icon size={16} />{value}</span>)}
+              <Rating value={video.rating} count={video.ratingCount} />
               <span className="rounded-full bg-[#260777] px-3 py-1 text-white">{video.subject} to {video.topic}</span>
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
@@ -93,6 +148,17 @@ function VideoDetailsView({ slug }) {
               <Button variant="dark"><Share2 size={18} />Share</Button>
             </div>
           </section>
+
+          <RatingControl
+            itemLabel="video"
+            value={userRating}
+            authStatus={authStatus}
+            isSaving={ratingState === 'loading'}
+            error={ratingError}
+            notice={ratingNotice}
+            onChange={handleRatingChange}
+            onDelete={handleRatingDelete}
+          />
 
           <section className="border-b-2 border-[var(--color-border-strong)] py-5">
             <h2 className="text-base font-black text-white">About this video</h2>

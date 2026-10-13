@@ -57,6 +57,8 @@ export function normalizeVideo(video) {
     thumbnailUrl: video.thumbnail_url || null,
     durationSeconds: video.duration_seconds ?? null,
     rating: video.rating ?? null,
+    ratingCount: video.rating_count ?? 0,
+    userRating: video.user_rating ?? null,
     views: video.views ?? null,
     upvotes: video.upvotes ?? null,
   }
@@ -85,4 +87,12 @@ export function getVideoBySlug(slug) {
   )
 
   return request
+}
+
+export function saveVideoRating(videoSlug, rating) {
+  return apiClient.post(`/videos/${encodeURIComponent(videoSlug)}/rating/`, { rating }).then((response) => response.data)
+}
+
+export function deleteVideoRating(videoSlug) {
+  return apiClient.delete(`/videos/${encodeURIComponent(videoSlug)}/rating/`).then((response) => response.data)
 }
