@@ -49,13 +49,13 @@ function AskQuestion() {
         <label className="block">
           <span className="font-black text-white">Description</span>
           <textarea required value={form.body} onChange={(event) => updateField('body', event.target.value)} className="mt-2 min-h-36 w-full border-2 border-[var(--color-border-strong)] bg-[var(--color-bg)] p-4 font-bold text-white outline-none focus:border-[var(--color-primary-light)]" placeholder="Add context, what you tried, and where you are confused." />
-          {errors.body ? <span className="mt-1 block text-sm font-bold text-[#ffadb6]">{errors.body}</span> : null}
+          {errors.body ? <span className="mt-1 block text-sm font-bold text-[var(--color-danger)]">{errors.body}</span> : null}
         </label>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Tags" value={form.tags} error={errors.tag_names} onChange={(value) => updateField('tags', value)} placeholder="Java, OOP, Programming" />
           <Field label="Subject" value={form.subject} error={errors.subject} onChange={(value) => updateField('subject', value)} placeholder="Java" />
         </div>
-        {createdQuestion?.slug ? <p className="border border-[#009a8d] bg-[#003f35] p-3 font-black text-white">Question posted successfully. <a href={`/questions/${createdQuestion.slug}`} className="underline">View question</a></p> : null}
+        {createdQuestion?.slug ? <p className="border border-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_12%,var(--color-surface))] p-3 font-black text-[var(--color-success)]">Question posted successfully. <a href={`/questions/${createdQuestion.slug}`} className="underline">View question</a></p> : null}
         <div className="flex flex-wrap gap-3">
           <Button type="submit" disabled={posting}>{posting ? 'Posting...' : 'Post Question'}</Button>
           <Button type="button" variant="dark" onClick={() => navigate('/community')}>Cancel</Button>
@@ -72,7 +72,7 @@ function Field({ label, value, error, onChange, placeholder }) {
     <label className="block">
       <span className="font-black text-white">{label}</span>
       <input required value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 h-12 w-full border-2 border-[var(--color-border-strong)] bg-[var(--color-bg)] px-4 font-bold text-white outline-none focus:border-[var(--color-primary-light)]" placeholder={placeholder} />
-      {error ? <span className="mt-1 block text-sm font-bold text-[#ffadb6]">{error}</span> : null}
+      {error ? <span className="mt-1 block text-sm font-bold text-[var(--color-danger)]">{error}</span> : null}
     </label>
   )
 }

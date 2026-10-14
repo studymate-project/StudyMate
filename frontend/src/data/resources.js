@@ -20,7 +20,7 @@ export const resources = [
     relatedResourceIds: ['resource-002', 'resource-003', 'resource-004', 'resource-005'],
     relatedQuestionIds: ['question-001', 'question-002'],
     relatedVideoIds: ['video-001', 'video-002'],
-    colorClass: 'bg-[#073c68]',
+    colorClass: 'bg-[var(--color-primary-soft)]',
   },
   {
     id: 'resource-002',
@@ -42,7 +42,7 @@ export const resources = [
     relatedResourceIds: ['resource-001', 'resource-003', 'resource-004'],
     relatedQuestionIds: ['question-001', 'question-004'],
     relatedVideoIds: ['video-001'],
-    colorClass: 'bg-[#260777]',
+    colorClass: 'bg-[var(--color-teal-soft)]',
   },
   {
     id: 'resource-003',
@@ -64,7 +64,7 @@ export const resources = [
     relatedResourceIds: ['resource-001', 'resource-002', 'resource-004'],
     relatedQuestionIds: ['question-001', 'question-003'],
     relatedVideoIds: ['video-002'],
-    colorClass: 'bg-[#260777]',
+    colorClass: 'bg-[var(--color-purple-soft)]',
   },
   {
     id: 'resource-004',
@@ -86,7 +86,7 @@ export const resources = [
     relatedResourceIds: ['resource-001', 'resource-002', 'resource-003'],
     relatedQuestionIds: ['question-001', 'question-002'],
     relatedVideoIds: ['video-001'],
-    colorClass: 'bg-[#260777]',
+    colorClass: 'bg-[var(--color-primary-soft)]',
   },
   {
     id: 'resource-005',
@@ -108,7 +108,7 @@ export const resources = [
     relatedResourceIds: ['resource-001'],
     relatedQuestionIds: ['question-005'],
     relatedVideoIds: [],
-    colorClass: 'bg-[#005448]',
+    colorClass: 'bg-[var(--color-teal-soft)]',
   },
   {
     id: 'resource-006',
@@ -130,7 +130,7 @@ export const resources = [
     relatedResourceIds: [],
     relatedQuestionIds: ['question-004', 'question-006'],
     relatedVideoIds: [],
-    colorClass: 'bg-[#763800]',
+    colorClass: 'bg-[var(--color-purple-soft)]',
   },
   {
     id: 'resource-007',
@@ -152,7 +152,7 @@ export const resources = [
     relatedResourceIds: [],
     relatedQuestionIds: ['question-007'],
     relatedVideoIds: [],
-    colorClass: 'bg-[#69006f]',
+    colorClass: 'bg-[var(--color-primary-soft)]',
   },
   {
     id: 'resource-008',
@@ -174,7 +174,7 @@ export const resources = [
     relatedResourceIds: [],
     relatedQuestionIds: ['question-003'],
     relatedVideoIds: [],
-    colorClass: 'bg-[#003f35]',
+    colorClass: 'bg-[var(--color-teal-soft)]',
   },
   {
     id: 'resource-009',
@@ -196,21 +196,21 @@ export const resources = [
     relatedResourceIds: [],
     relatedQuestionIds: [],
     relatedVideoIds: [],
-    colorClass: 'bg-[#826600]',
+    colorClass: 'bg-[var(--color-purple-soft)]',
   },
   {
     id: 'resource-010',
     slug: 'java-collections-cheat-sheet',
     title: 'Java Collections Cheat Sheet',
     type: 'Notes', subject: 'Java', topic: 'Collections', authorId: 'user-001', rating: 4.8, views: 1390, downloads: 247, saves: 103, upvotes: 84,
-    difficulty: 'Beginner', uploadedAt: 'September 10, 2026', description: 'A compact Java Collections reference covering List, Set, Map, Queue, and their common implementations.', tags: ['Java', 'Collections', 'Cheat Sheet'], relatedResourceIds: ['resource-001'], relatedQuestionIds: ['question-008'], relatedVideoIds: [], colorClass: 'bg-[#073c68]',
+    difficulty: 'Beginner', uploadedAt: 'September 10, 2026', description: 'A compact Java Collections reference covering List, Set, Map, Queue, and their common implementations.', tags: ['Java', 'Collections', 'Cheat Sheet'], relatedResourceIds: ['resource-001'], relatedQuestionIds: ['question-008'], relatedVideoIds: [], colorClass: 'bg-[var(--color-primary-soft)]',
   },
   {
     id: 'resource-011',
     slug: 'oop-interview-questions',
     title: 'OOP Interview Questions',
     type: 'Questions', subject: 'Java', topic: 'OOP', authorId: 'user-001', rating: 4.7, views: 1180, downloads: 205, saves: 87, upvotes: 69,
-    difficulty: 'Intermediate', uploadedAt: 'September 8, 2026', description: 'Common object-oriented programming interview questions with concise answers and examples.', tags: ['Java', 'OOP', 'Interview'], relatedResourceIds: ['resource-001'], relatedQuestionIds: ['question-001'], relatedVideoIds: [], colorClass: 'bg-[#260777]',
+    difficulty: 'Intermediate', uploadedAt: 'September 8, 2026', description: 'Common object-oriented programming interview questions with concise answers and examples.', tags: ['Java', 'OOP', 'Interview'], relatedResourceIds: ['resource-001'], relatedQuestionIds: ['question-001'], relatedVideoIds: [], colorClass: 'bg-[var(--color-teal-soft)]',
   },
 ]
 

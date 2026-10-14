@@ -1,13 +1,14 @@
-import { BookOpen, Download, ExternalLink, FileText, Save, Share2 } from 'lucide-react'
+import { BookOpen, Download, FileText, Save, Share2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { saveResource, unsaveResource } from '../../api/resources'
 import { getApiErrorMessage } from '../../api'
 import { trackResourceDownload } from '../../api/resources'
 import Badge from '../common/Badge'
 import Button from '../common/Button'
+import IconButton from '../common/IconButton'
 import Rating from '../common/Rating'
 
-function ResourceHeader({ resource, author, onDownloadCountChange }) {
+function ResourceHeader({ resource, author, onDownloadCountChange, descriptionContent }) {
   const [downloadState, setDownloadState] = useState('idle')
   const [saveState, setSaveState] = useState('idle')
   const [saved, setSaved] = useState(resource.isSaved)
@@ -70,7 +71,7 @@ function ResourceHeader({ resource, author, onDownloadCountChange }) {
   return (
     <section className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-7">
       <div className="grid gap-5 sm:grid-cols-[78px_minmax(0,1fr)]">
-        <div className="flex h-[78px] w-[78px] items-center justify-center bg-[#073c68] text-[var(--color-primary-light)]">
+        <div className="flex h-[78px] w-[78px] items-center justify-center rounded-lg bg-[var(--color-surface-muted)] text-[var(--color-primary-light)]">
           <FileText size={36} />
         </div>
         <div className="min-w-0">
@@ -85,32 +86,42 @@ function ResourceHeader({ resource, author, onDownloadCountChange }) {
           <p className="mt-3 text-sm font-black text-[var(--color-text)]">
             Uploaded by {author?.name || 'StudyMate member'}{resource.uploadedAt ? ` - ${resource.uploadedAt}` : ''}
           </p>
-          <Rating value={resource.rating} count={resource.ratingCount} className="mt-3" />
+          <Rating value={resource.rating} count={resource.ratingCount} size={22} className="mt-3" />
         </div>
       </div>
 
-      <p className="mt-6 max-w-4xl text-base font-black leading-snug text-white/90">{resource.description}</p>
+      {descriptionContent || <p className="mt-6 max-w-4xl text-base font-black leading-snug text-white/90">{resource.description}</p>}
 
       <div className="mt-6 flex flex-wrap gap-3">
         <Button to={`/resources/${resource.slug}/read`}>
           <BookOpen size={18} />
           Read
         </Button>
-        <Button className="border-[#009a8d] bg-[#009a8d] hover:bg-[#00b2a3]" onClick={handleDownload} disabled={!resource.resourceUrl || isLink || downloadState === 'loading'}>
+        <Button variant="secondary" onClick={handleDownload} disabled={!resource.resourceUrl || isLink || downloadState === 'loading'}>
           <Download size={18} />
           {downloadState === 'loading' ? 'Downloading...' : 'Download'}
         </Button>
-        <Button variant="secondary" className="border-[#58a7df] text-[#58a7df]" onClick={handleSave} disabled={saveState === 'loading'}>
-          <Save size={18} />
-          {saveState === 'loading' ? 'Saving...' : saved ? 'Saved' : 'Save'}
-        </Button>
-        <Button variant="dark">
-          <ExternalLink size={18} />
-          <Share2 size={18} className="sr-only" />
-          Share
-        </Button>
+        <div className="flex items-center gap-1" aria-label="Resource actions">
+          <IconButton
+            label={saved ? 'Remove resource from saved items' : 'Save resource'}
+            variant="default"
+            onClick={handleSave}
+            disabled={saveState === 'loading'}
+            aria-pressed={saved}
+            className={`h-11 w-11 rounded-full border-0 bg-transparent p-0 hover:border-transparent hover:bg-transparent ${saved ? 'text-[var(--color-primary-light)]' : ''}`}
+          >
+            <Save size={20} className={saved ? 'fill-current' : ''} aria-hidden="true" />
+          </IconButton>
+          <IconButton
+            label="Share resource"
+            variant="default"
+            className="h-11 w-11 rounded-full border-0 bg-transparent p-0 hover:border-transparent hover:bg-transparent"
+          >
+            <Share2 size={20} aria-hidden="true" />
+          </IconButton>
+        </div>
       </div>
-      {actionError ? <p role="alert" className="mt-3 text-sm font-bold text-[#ffadb6]">{actionError}</p> : null}
+      {actionError ? <p role="alert" className="mt-3 text-sm font-bold text-[var(--color-danger)]">{actionError}</p> : null}
     </section>
   )
 }

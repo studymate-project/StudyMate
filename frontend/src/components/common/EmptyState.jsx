@@ -7,7 +7,7 @@ function EmptyState() {
       <Bookmark size={42} className="text-[var(--color-text)]" />
       <h2 className="mt-5 text-base font-black text-[var(--color-text)]">No saved resources yet.</h2>
       <p className="mt-5 text-sm font-black text-[var(--color-text)]">Find resources you love and save them for later.</p>
-      <Button to="/explore" className="mt-5 bg-[var(--color-blue)] hover:bg-[var(--color-blue-hover)]">
+      <Button to="/explore" variant="secondary" className="mt-5">
         Explore Resources
       </Button>
     </section>

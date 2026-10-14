@@ -15,5 +15,6 @@ urlpatterns = [
     path('resources/', include('apps.resources.urls')),
     path('videos/', include('apps.resources.video_urls')),
     path('questions/', include('apps.community.urls')),
+    path('discussion/', include('apps.community.discussion_urls')),
     path('notifications/', include('apps.notifications.urls')),
 ]

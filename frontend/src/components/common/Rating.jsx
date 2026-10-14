@@ -6,7 +6,7 @@ function clampFill(value, index) {
   return Math.min(1, Math.max(0, numericValue - index))
 }
 
-function RatingStar({ fill, size = 15, label, onClick, disabled }) {
+function RatingStar({ fill, size = 20, label, onClick, disabled }) {
   const star = (
     <span className="relative inline-flex" aria-hidden="true">
       <Star size={size} className="text-[var(--color-star)]" />
@@ -48,6 +48,7 @@ function Rating({
   interactive = false,
   onChange,
   disabled = false,
+  size = 20,
   className = '',
 }) {
   const formattedValue = formatRating(value)
@@ -61,13 +62,14 @@ function Rating({
 
   return (
     <span className={`inline-flex flex-wrap items-center gap-2 text-sm font-black ${className}`}>
-      <span className="inline-flex items-center gap-0.5" role={interactive ? 'group' : undefined} aria-label={groupLabel}>
+      <span className="inline-flex items-center gap-1" role={interactive ? 'group' : undefined} aria-label={groupLabel}>
         {Array.from({ length: stars }).map((_, index) => {
           const starValue = index + 1
           return (
             <RatingStar
               key={starValue}
               fill={clampFill(value, index)}
+              size={size}
               label={`Rate ${starValue} out of ${stars} stars`}
               onClick={interactive && onChange ? () => onChange(starValue) : undefined}
               disabled={disabled}

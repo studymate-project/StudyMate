@@ -6,7 +6,7 @@ from apps.resources.models import Tag
 from apps.resources.serializers import TagSerializer
 from apps.users.serializers import PublicUserSerializer
 
-from .models import Answer, Question
+from .models import Answer, DiscussionComment, Question
 
 
 class QuestionSerializer(serializers.ModelSerializer):
@@ -104,3 +104,92 @@ class ProfileAnswerSerializer(AnswerSerializer):
 
     class Meta(AnswerSerializer.Meta):
         fields = AnswerSerializer.Meta.fields + ("question_title", "question_slug")
+
+
+class DiscussionReplySerializer(serializers.ModelSerializer):
+    author = PublicUserSerializer(read_only=True)
+    like_count = serializers.SerializerMethodField()
+    liked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DiscussionComment
+        fields = (
+            "id",
+            "parent",
+            "author",
+            "body",
+            "like_count",
+            "liked",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_like_count(self, comment: DiscussionComment) -> int:
+        return getattr(comment, "like_count", comment.likes.count())
+
+    def get_liked(self, comment: DiscussionComment) -> bool:
+        return bool(getattr(comment, "liked_by_request_user", False))
+
+
+class DiscussionCommentSerializer(serializers.ModelSerializer):
+    author = PublicUserSerializer(read_only=True)
+    like_count = serializers.SerializerMethodField()
+    liked = serializers.SerializerMethodField()
+    replies = DiscussionReplySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = DiscussionComment
+        fields = (
+            "id",
+            "resource",
+            "video",
+            "parent",
+            "author",
+            "body",
+            "like_count",
+            "liked",
+            "replies",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "resource",
+            "video",
+            "author",
+            "like_count",
+            "liked",
+            "replies",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+
+    def validate_body(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Comment text cannot be blank.")
+        return value
+
+    def validate_parent(self, parent):
+        if parent is None:
+            return parent
+        if parent.parent_id is not None:
+            raise serializers.ValidationError("Replies can only be added to top-level comments.")
+
+        resource = self.context.get("resource")
+        video = self.context.get("video")
+        if resource is not None and parent.resource_id != resource.pk:
+            raise serializers.ValidationError("The reply target does not match this resource.")
+        if video is not None and parent.video_id != video.pk:
+            raise serializers.ValidationError("The reply target does not match this video.")
+        return parent
+
+    def get_like_count(self, comment: DiscussionComment) -> int:
+        return getattr(comment, "like_count", comment.likes.count())
+
+    def get_liked(self, comment: DiscussionComment) -> bool:
+        return bool(getattr(comment, "liked_by_request_user", False))

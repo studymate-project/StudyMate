@@ -11,7 +11,7 @@ function ResourceCard({ resource }) {
       to={`/resources/${resource.slug}`}
       className="block min-h-[250px] border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-primary-light)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
     >
-      <div className={`${resource.colorClass} flex h-14 w-14 items-center justify-center text-[var(--color-primary-light)]`}>
+      <div className={`${resource.colorClass} flex h-14 w-14 items-center justify-center rounded-lg text-[var(--color-primary-light)]`}>
         <FileText size={25} />
       </div>
       <h3 className="mt-5 min-h-[48px] text-lg font-black leading-tight text-white">{resource.title}</h3>
@@ -23,7 +23,7 @@ function ResourceCard({ resource }) {
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         {resource.tags.slice(0, 2).map((tag) => (
-          <span key={tag} className="bg-[var(--color-chip)] px-3 py-2 text-base font-black leading-none text-white">
+          <span key={tag} className="rounded-lg bg-[var(--color-chip)] px-3 py-2 text-base font-black leading-none text-[var(--color-text)]">
             #{tag}
           </span>
         ))}

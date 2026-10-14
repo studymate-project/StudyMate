@@ -21,14 +21,14 @@ function SavedResourceItem({ resource }) {
 
       <div className="flex flex-col items-stretch gap-12 md:items-end">
         <div className="flex justify-end gap-3">
-          <button type="button" aria-label={`Bookmark ${resource.title}`} className="text-[#58a7df]">
+          <button type="button" aria-label={`Bookmark ${resource.title}`} className="text-[var(--color-text)]">
             <Bookmark size={18} className="fill-current" />
           </button>
           <button type="button" aria-label={`Remove ${resource.title}`} className="text-[var(--color-text)] hover:text-white">
             <Trash2 size={19} />
           </button>
         </div>
-        <Button to="/resources/java-oop-complete-notes" className="bg-[var(--color-blue)] hover:bg-[var(--color-blue-hover)]">
+        <Button to="/resources/java-oop-complete-notes" variant="secondary">
           Open Resource
         </Button>
       </div>

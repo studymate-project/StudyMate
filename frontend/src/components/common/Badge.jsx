@@ -1,16 +1,16 @@
 const variants = {
-  blue: 'border-[#1f87d0] bg-[#0a5f9c] text-white',
-  purple: 'border-[#5f3be2] bg-[#4020b6] text-white',
-  teal: 'border-[#14a591] bg-[#007f70] text-white',
-  gray: 'border-[#93a3ae] bg-[#718391] text-[#162532]',
+  blue: 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary-light)]',
+  purple: 'border-[var(--color-purple)] bg-[var(--color-purple-soft)] text-[var(--color-purple)]',
+  teal: 'border-[var(--color-teal)] bg-[var(--color-teal-soft)] text-[var(--color-teal)]',
+  gray: 'border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-text)]',
   outline: 'border-[var(--color-border-strong)] bg-transparent text-[var(--color-text)]',
   dark: 'border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-text)]',
-  orange: 'border-[#d97816] bg-[#bd5908] text-white',
+  orange: 'border-[var(--color-warning)] bg-[color-mix(in_srgb,var(--color-warning)_12%,var(--color-surface))] text-[var(--color-warning)]',
 }
 
 function Badge({ children, variant = 'blue', className = '' }) {
   return (
-    <span className={`inline-flex min-h-6 items-center rounded-full border px-2.5 text-sm font-black leading-none ${variants[variant]} ${className}`}>
+    <span className={`inline-flex min-h-6 items-center rounded-lg border px-2.5 text-sm font-black leading-none ${variants[variant]} ${className}`}>
       {children}
     </span>
   )

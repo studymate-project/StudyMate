@@ -129,7 +129,7 @@ function SearchResults() {
                 defaultValue={urlQuery}
                 onChange={handleQueryChange}
                 placeholder="Search resources, videos, questions, and users"
-                className="h-14 w-full border-2 border-[var(--color-border)] bg-[var(--color-surface)] pl-12 pr-4 text-base font-black text-white outline-none focus:border-[#58a7df]"
+                className="h-14 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] pl-12 pr-4 text-base font-medium text-[var(--color-text)] outline-none focus:border-[var(--color-focus)]"
               />
             </label>
             <Button type="submit">Search</Button>

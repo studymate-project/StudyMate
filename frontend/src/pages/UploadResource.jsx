@@ -19,7 +19,6 @@ const initialForm = {
   course: '',
   semester: '',
   selectedType: 'File',
-  tags: '',
   youtubeUrl: '',
   externalUrl: '',
 }
@@ -175,7 +174,7 @@ function UploadResource() {
     : null
 
   return <>
-    <section className="bg-[var(--color-hero)]"><div className="mx-auto w-full max-w-[1260px] px-5 py-6 sm:px-8 lg:px-10"><h1 className="text-2xl font-bold text-white sm:text-3xl">Share a Resource</h1><p className="mt-1 text-sm font-medium text-[#e1deff]">Help other students by sharing your notes, guides, and materials.</p></div></section>
+    <section className="bg-[var(--color-hero)]"><div className="mx-auto w-full max-w-[1260px] px-5 py-6 sm:px-8 lg:px-10"><h1 className="text-2xl font-bold text-white sm:text-3xl">Share a Resource</h1><p className="mt-1 text-sm font-medium text-[var(--color-text-dim)]">Help other students by sharing your notes, guides, and materials.</p></div></section>
     <main className="mx-auto w-full max-w-[1260px] px-5 py-7 sm:px-8 lg:px-10">
       <form onSubmit={submit} noValidate className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_310px] lg:items-start">
         <section className="min-w-0 space-y-5">
@@ -188,12 +187,11 @@ function UploadResource() {
             <TextField label="Semester" value={form.semester} onChange={(value) => updateField('semester', value)} placeholder="5th Semester" error={errors.semester} />
           </div>
           <Field label="Resource type" error={errors.selectedType}><ResourceTypeSelector value={form.selectedType} onChange={setSelectedType} /></Field>
-          <Field label="Tags"><input value={form.tags} onChange={(event) => updateField('tags', event.target.value)} placeholder="#DBMS #Normalization #SQL #BTech" className="control" /></Field>
         </section>
         <aside className="space-y-4">
           {isVideo ? <VideoUploadField value={form.youtubeUrl} onChange={(value) => { updateField('youtubeUrl', value); setVideoError('') }} error={videoError} /> : isLink ? <LinkResourceField value={form.externalUrl} onChange={(value) => updateField('externalUrl', value)} error={errors.externalUrl} /> : <FileDropzone file={file} error={fileError} onFileChange={(nextFile, nextError) => { setFile(nextFile); setFileError(nextError); setUploadState(nextError ? 'validation' : 'idle'); setUploadMessage(nextError || '') }} />}
           <UploadGuidelines />
-          {uploadMessage ? <p role={uploadState === 'uploading' || uploadState === 'success' ? 'status' : 'alert'} className={`px-2 text-center text-sm font-semibold ${uploadState === 'success' || uploadState === 'uploading' ? 'text-[var(--color-text)]' : 'text-[#ffadb6]'}`}>{uploadMessage}{createdPath ? <>{' '}<Link to={createdPath} className="underline">View resource</Link></> : null}</p> : null}
+          {uploadMessage ? <p role={uploadState === 'uploading' || uploadState === 'success' ? 'status' : 'alert'} className={`px-2 text-center text-sm font-semibold ${uploadState === 'success' || uploadState === 'uploading' ? 'text-[var(--color-text)]' : 'text-[var(--color-danger)]'}`}>{uploadMessage}{createdPath ? <>{' '}<Link to={createdPath} className="underline">View resource</Link></> : null}</p> : null}
           <Button type="submit" className="w-full" disabled={uploadState === 'uploading'}>{uploadState === 'uploading' ? 'Publishing...' : 'Publish Resource'}</Button>
           <Button type="button" variant="secondary" className="w-full" onClick={saveDraft}>Save as Draft</Button>
           <p className="px-2 text-center text-xs font-medium leading-relaxed text-[var(--color-text-dim)]">Add clear details so other students can find your resource faster.</p>
@@ -206,10 +204,10 @@ function UploadResource() {
 }
 
 function LinkResourceField({ value, onChange, error }) {
-  return <section className="space-y-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5"><Link2 className="text-[#55b7ee]" size={27} /><label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--color-text)]">Resource link</span><input type="url" value={value} onChange={(event) => onChange(event.target.value)} placeholder="https://example.com/study-resource" className="control" />{error ? <span className="mt-2 block text-sm font-medium text-[#ffadb6]">{error}</span> : null}</label><p className="text-sm leading-relaxed text-[var(--color-text)]">Add a publicly accessible study resource link.</p></section>
+  return <section className="space-y-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5"><Link2 className="text-[var(--color-text)]" size={27} /><label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--color-text)]">Resource link</span><input type="url" value={value} onChange={(event) => onChange(event.target.value)} placeholder="https://example.com/study-resource" className="control" />{error ? <span className="mt-2 block text-sm font-medium text-[var(--color-danger)]">{error}</span> : null}</label><p className="text-sm leading-relaxed text-[var(--color-text)]">Add a publicly accessible study resource link.</p></section>
 }
 
-function Field({ label, error, children }) { return <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--color-text)]">{label}</span>{children}{error ? <span className="mt-1 block text-sm font-medium text-[#ffadb6]">{error}</span> : null}</label> }
+function Field({ label, error, children }) { return <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--color-text)]">{label}</span>{children}{error ? <span className="mt-1 block text-sm font-medium text-[var(--color-danger)]">{error}</span> : null}</label> }
 function TextField({ label, value, onChange, placeholder, error }) { return <Field label={label} error={error}><input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="control" /></Field> }
 
 export default UploadResource

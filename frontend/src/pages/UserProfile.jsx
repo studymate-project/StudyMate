@@ -81,7 +81,7 @@ function UserProfile() {
             </div>
             <p className="mt-2 font-black text-[var(--color-text)]">@{user.username}{profile.college ? ` - ${profile.college}` : ''}</p>
             {profile.bio ? <p className="mt-3 max-w-2xl text-sm font-bold text-[var(--color-text)]">{profile.bio}</p> : null}
-            {followError ? <p className="mt-3 text-sm text-red-300" role="alert">{followError}</p> : null}
+            {followError ? <p className="mt-3 text-sm text-[var(--color-danger)]" role="alert">{followError}</p> : null}
           </div>
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -94,7 +94,7 @@ function UserProfile() {
 
       <div className="mt-7 grid gap-7 lg:grid-cols-2">
         <ProfileList title="Resources Uploaded" empty="No resources uploaded yet.">
-          {resources.map((resource) => <Link key={resource.id} to={`/resources/${resource.slug}`} className="flex items-center gap-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-4"><BookOpen className="shrink-0 text-[#58a7df]" /><span className="min-w-0"><strong className="block truncate text-white">{resource.title}</strong><span className="text-sm font-black text-[var(--color-text)]">{resource.type}</span></span></Link>)}
+          {resources.map((resource) => <Link key={resource.id} to={`/resources/${resource.slug}`} className="flex items-center gap-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-4"><BookOpen className="shrink-0 text-[var(--color-text)]" /><span className="min-w-0"><strong className="block truncate text-white">{resource.title}</strong><span className="text-sm font-black text-[var(--color-text)]">{resource.type}</span></span></Link>)}
         </ProfileList>
         <ProfileList title="Questions Asked" empty="No questions asked yet.">
           {questions.map((question) => <Link key={question.id} to={`/questions/${question.slug}`} className="flex items-center gap-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-4"><MessageSquare className="shrink-0 text-[var(--color-primary-light)]" /><span className="min-w-0"><strong className="block text-white">{question.title}</strong><span className="text-sm font-black text-[var(--color-text)]">{question.upvotes ?? 0} Upvotes - {question.answerCount} Answers</span></span></Link>)}

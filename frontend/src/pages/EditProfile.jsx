@@ -210,7 +210,7 @@ function EditProfile() {
   return <main className="mx-auto w-full max-w-[900px] px-5 py-8 sm:px-8 lg:px-10">
     <div className="mb-6 flex items-center justify-between gap-4">
       <div><h1 className="text-3xl font-black text-white">Edit Profile</h1><p className="mt-2 text-sm text-[var(--color-text)]">Update the profile information shown to the StudyMate community.</p></div>
-      <Link to="/profile" className="text-sm font-semibold text-[#55b7ee] hover:text-white">Cancel</Link>
+      <Link to="/profile" className="text-sm font-semibold text-[var(--color-text)] hover:text-white">Cancel</Link>
     </div>
     <form onSubmit={handleSubmit} className="space-y-6 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-7">
       <div className="grid gap-5 sm:grid-cols-2">
@@ -223,7 +223,7 @@ function EditProfile() {
         <Field label="City" value={form.city} onChange={(value) => updateField('city', value)} />
       </div>
       <Field label="Avatar URL" type="url" value={form.avatarUrl} onChange={(value) => updateField('avatarUrl', value)} />
-      <label className="block text-sm font-semibold text-white">Bio<textarea value={form.bio} onChange={(event) => updateField('bio', event.target.value)} maxLength={1000} rows={4} className="mt-2 block w-full border-2 border-[var(--color-border)] bg-[var(--color-band)] px-3 py-2 text-sm text-white outline-none focus:border-[#55b7ee]" /></label>
+      <label className="block text-sm font-semibold text-white">Bio<textarea value={form.bio} onChange={(event) => updateField('bio', event.target.value)} maxLength={1000} rows={4} className="mt-2 block w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-band)] px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-focus)]" /></label>
       <div className="grid gap-5 sm:grid-cols-3">
         <SelectField label="Education background" value={form.educationBackgroundId} onChange={(value) => updateField('educationBackgroundId', value)} options={backgrounds} placeholder="Select background" loading={catalogStatus.backgrounds === 'loading'} disabled={catalogStatus.backgrounds !== 'success'} />
         <SelectField label="Course / program" value={form.courseId} onChange={(value) => updateField('courseId', value)} options={courses} placeholder="Select course" loading={catalogStatus.courses === 'loading'} disabled={!form.educationBackgroundId || catalogStatus.courses !== 'success'} />
@@ -232,18 +232,18 @@ function EditProfile() {
       {selectedBackgroundIsOther || form.customBackground ? <Field label="Custom educational background" value={form.customBackground} onChange={(value) => updateField('customBackground', value)} error={error?.data?.custom_background} /> : null}
       {selectedCourseIsOther || form.customCourse ? <Field label="Custom course / program" value={form.customCourse} onChange={(value) => updateField('customCourse', value)} error={error?.data?.custom_course} maxLength={160} /> : null}
       {hasCustomStage ? <div className="grid gap-5 sm:grid-cols-2"><SelectField label="Stage type" value={form.academicLevelType} onChange={(value) => updateField('academicLevelType', value)} options={stageTypes} placeholder="Select stage type" /><Field label="Academic level / stage" value={form.academicLevelValue} onChange={(value) => updateField('academicLevelValue', value)} error={error?.data?.academic_level_value} /></div> : null}
-      {error ? <p className="text-sm text-red-300" role="alert">{getApiErrorMessage(error)}</p> : null}
+      {error ? <p className="text-sm text-[var(--color-danger)]" role="alert">{getApiErrorMessage(error)}</p> : null}
       <div className="flex justify-end"><Button type="submit" disabled={saveState === 'loading'}>{saveState === 'loading' ? 'Saving...' : 'Save changes'}</Button></div>
     </form>
   </main>
 }
 
 function Field({ label, value, onChange, type = 'text', required = false, error = '', maxLength = 120 }) {
-  return <label className="block text-sm font-semibold text-white">{label}<input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} maxLength={type === 'url' ? undefined : maxLength} className={`mt-2 block min-h-11 w-full border-2 ${error ? 'border-red-300' : 'border-[var(--color-border)]'} bg-[var(--color-band)] px-3 text-sm text-white outline-none focus:border-[#55b7ee]`} />{error ? <span className="mt-1 block text-xs font-normal text-red-200">{error}</span> : null}</label>
+  return <label className="block text-sm font-semibold text-white">{label}<input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} maxLength={type === 'url' ? undefined : maxLength} className={`mt-2 block min-h-11 w-full rounded-lg border ${error ? 'border-[var(--color-danger)]' : 'border-[var(--color-border)]'} bg-[var(--color-band)] px-3 text-sm text-white outline-none focus:border-[var(--color-focus)]`} />{error ? <span className="mt-1 block text-xs font-normal text-[var(--color-danger)]">{error}</span> : null}</label>
 }
 
 function SelectField({ label, value, onChange, options, placeholder, disabled = false, loading = false }) {
-  return <label className="block text-sm font-semibold text-white">{label}<select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} className="mt-2 block min-h-11 w-full border-2 border-[var(--color-border)] bg-[var(--color-band)] px-2 text-sm text-white outline-none focus:border-[#55b7ee] disabled:opacity-60"><option value="">{loading ? 'Loading...' : placeholder}</option>{options.map((option) => <option key={option.id || option.value} value={option.id || option.value}>{option.name || option.label}</option>)}</select></label>
+  return <label className="block text-sm font-semibold text-white">{label}<select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} className="mt-2 block min-h-11 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-band)] px-2 text-sm text-white outline-none focus:border-[var(--color-focus)] disabled:opacity-60"><option value="">{loading ? 'Loading...' : placeholder}</option>{options.map((option) => <option key={option.id || option.value} value={option.id || option.value}>{option.name || option.label}</option>)}</select></label>
 }
 
 function ProfileMessage({ title, message, action = null, loadingLabel = '' }) {

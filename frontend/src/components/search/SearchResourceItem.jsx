@@ -5,7 +5,7 @@ import Rating from '../common/Rating'
 function SearchResourceItem({ resource }) {
   return (
     <article className="relative border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 pr-11">
-      <button type="button" aria-label={`Save ${resource.title}`} className="absolute right-4 top-4 text-[#58a7df]">
+      <button type="button" aria-label={`Save ${resource.title}`} className="absolute right-4 top-4 text-[var(--color-text)]">
         <Bookmark size={18} className="fill-current" />
       </button>
       <h3 className="text-base font-black text-white">{resource.title}</h3>

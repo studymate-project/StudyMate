@@ -37,5 +37,9 @@ class IsAnswerAuthorOrReadOnly(IsOwnerOrReadOnly):
     owner_attribute = "author"
 
 
+class IsDiscussionCommentAuthorOrReadOnly(IsOwnerOrReadOnly):
+    owner_attribute = "author"
+
+
 class IsNotificationRecipient(IsOwnerOrReadOnly):
     owner_attribute = "recipient"

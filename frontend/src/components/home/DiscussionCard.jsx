@@ -9,7 +9,7 @@ function DiscussionCard({ discussion }) {
       to={`/questions/${discussion.slug}`}
       className="block border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-primary-light)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
     >
-      <div className="flex h-10 w-10 items-center justify-center bg-[#260777] text-[var(--color-primary-light)]">
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-teal-soft)] text-[var(--color-teal)]">
         <MessageSquare size={18} />
       </div>
       <h3 className="mt-5 min-h-[52px] text-base font-black leading-snug text-white">{discussion.title}</h3>

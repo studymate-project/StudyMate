@@ -7,7 +7,7 @@ function InterestSelector({ selected, onChange }) {
       <div className="flex flex-wrap gap-2">
         {interests.map((interest) => {
           const active = selected.includes(interest)
-          return <button key={interest} type="button" aria-pressed={active} onClick={() => onChange(interest)} className={`min-h-7 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)] ${active ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border-strong)] text-[var(--color-text)] hover:border-[var(--color-primary-light)] hover:text-white'}`}>{interest}</button>
+          return <button key={interest} type="button" aria-pressed={active} onClick={() => onChange(interest)} className={`min-h-7 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] ${active ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-dark)]' : 'border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-text)] hover:border-[var(--color-focus)] hover:text-white'}`}>{interest}</button>
         })}
       </div>
     </fieldset>

@@ -31,7 +31,7 @@ function LazyPage({ children }) {
 }
 
 function PageLoading() {
-  return <div className="flex min-h-[calc(100svh-4rem)] items-center justify-center bg-[var(--color-bg)] px-4" role="status" aria-label="Loading page"><Spinner label="Loading page" /></div>
+  return <div className="flex min-h-[calc(100svh-4rem)] items-center justify-center bg-(--color-bg) px-4" role="status" aria-label="Loading page"><Spinner label="Loading page" /></div>
 }
 
 function AppRoutes() {

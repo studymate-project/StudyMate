@@ -59,7 +59,7 @@ function Notifications() {
       message={isUnauthenticated ? 'Sign in to view your notifications.' : getApiErrorMessage(error)}
       action={isUnauthenticated
         ? <Button to="/login" variant="secondary" className="mt-5">Sign in</Button>
-        : <button type="button" onClick={retry} className="mt-5 border border-[#2585c0] px-5 py-2 text-sm font-semibold text-[#55b7ee] hover:bg-[#073c68]">Try again</button>}
+        : <button type="button" onClick={retry} className="mt-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-2 text-sm font-semibold text-[var(--color-text)] hover:bg-[var(--color-blue-hover)]">Try again</button>}
     />
   }
 

@@ -77,7 +77,7 @@ function SavedResources() {
       message={isUnauthenticated ? 'Sign in to view your saved resources.' : getApiErrorMessage(error)}
       action={isUnauthenticated
         ? <Button to="/login" variant="secondary" className="mt-5">Sign in</Button>
-        : <button type="button" onClick={retry} className="mt-5 border border-[#2585c0] px-5 py-2 text-sm font-semibold text-[#55b7ee] hover:bg-[#073c68]">Try again</button>}
+        : <button type="button" onClick={retry} className="mt-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-2 text-sm font-semibold text-[var(--color-text)] hover:bg-[var(--color-blue-hover)]">Try again</button>}
     />
   }
 
@@ -93,7 +93,7 @@ function SavedResources() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" role="tablist" aria-label="Saved resource types">
             {savedTabs.map((tab) => {
               const active = activeTab === tab
-              return <button key={tab} type="button" role="tab" aria-selected={active} onClick={() => setActiveTab(tab)} className={`min-h-12 border-b-4 px-4 text-base font-black transition-colors ${active ? 'border-[#58a7df] text-[#58a7df]' : 'border-transparent text-[var(--color-text)] hover:text-white'}`}>{tab}</button>
+              return <button key={tab} type="button" role="tab" aria-selected={active} onClick={() => setActiveTab(tab)} className={`min-h-12 border-b-4 px-4 text-base font-black transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] ${active ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary-light)]' : 'border-transparent text-[var(--color-text)] hover:text-white'}`}>{tab}</button>
             })}
           </div>
           <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 border-2 border-[var(--color-border)] px-4 text-sm font-black text-[var(--color-text)]">
@@ -132,7 +132,7 @@ function SavedItem({ saved, isRemoving, onRemove }) {
 
       <div className="flex flex-col items-stretch gap-6 md:items-end">
         <div className="flex justify-end gap-3">
-          <Bookmark size={18} className="fill-current text-[#58a7df]" />
+          <Bookmark size={18} className="fill-current text-[var(--color-text)]" />
           <button type="button" onClick={onRemove} disabled={isRemoving} aria-label={`Remove ${target.title}`} className="text-[var(--color-text)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"><Trash2 size={19} /></button>
         </div>
         <Button to={to} className="bg-[var(--color-blue)] hover:bg-[var(--color-blue-hover)]">Open Resource</Button>

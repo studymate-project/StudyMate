@@ -3,7 +3,7 @@ import { PlayCircle } from 'lucide-react'
 function SearchVideoItem({ video }) {
   return (
     <article className="grid gap-4 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:grid-cols-[96px_minmax(0,1fr)] sm:items-center">
-      <div className="flex h-16 items-center justify-center bg-[#073c68] text-[#bd650a]">
+      <div className="flex h-16 items-center justify-center rounded-lg bg-[var(--color-surface-muted)] text-[var(--color-text)]">
         <PlayCircle size={25} />
       </div>
       <div className="min-w-0">

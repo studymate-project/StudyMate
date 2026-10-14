@@ -22,7 +22,7 @@ function SearchBar({ placeholder = 'Search anything...' }) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={placeholder}
-          className="h-12 w-full border-2 border-[var(--color-border-strong)] bg-[var(--color-nav)] py-2 pl-10 pr-3 text-base font-bold text-white outline-none placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-primary-light)]"
+          className="h-12 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-nav)] py-2 pl-10 pr-3 text-base font-medium text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-focus)]"
         />
       </label>
     </form>

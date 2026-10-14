@@ -13,7 +13,7 @@ function ResourceListItem({ resource }) {
         to={`/resources/${resource.slug}`}
         className="flex min-w-0 items-center gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
       >
-        <div className={`${resource.colorClass} flex h-12 w-12 shrink-0 items-center justify-center text-[var(--color-primary-light)]`}>
+        <div className={`${resource.colorClass} flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-[var(--color-primary-light)]`}>
           <FileText size={22} />
         </div>
         <div className="min-w-0">

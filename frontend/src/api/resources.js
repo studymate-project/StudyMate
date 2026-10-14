@@ -21,13 +21,13 @@ const choiceLabels = {
 }
 
 const colorClasses = [
-  'bg-[#073c68]',
-  'bg-[#260777]',
-  'bg-[#005448]',
-  'bg-[#763800]',
-  'bg-[#69006f]',
-  'bg-[#003f35]',
-  'bg-[#826600]',
+  'bg-[var(--color-primary-soft)]',
+  'bg-[var(--color-teal-soft)]',
+  'bg-[var(--color-purple-soft)]',
+  'bg-[var(--color-primary-soft)]',
+  'bg-[var(--color-teal-soft)]',
+  'bg-[var(--color-purple-soft)]',
+  'bg-[var(--color-primary-soft)]',
 ]
 
 const supportedQueryKeys = new Set([

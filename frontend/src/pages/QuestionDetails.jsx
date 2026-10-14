@@ -121,7 +121,7 @@ function QuestionDetailsView({ slug }) {
           <section className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-7">
             <h1 className="text-2xl font-black leading-tight text-white sm:text-3xl">{question.title}</h1>
             <div className="mt-4 flex flex-wrap gap-2">
-              {question.tags.map((tag) => <span key={tag} className="rounded-full bg-[var(--color-primary)] px-3 py-2 text-base font-black text-white">#{tag}</span>)}
+              {question.tags.map((tag) => <span key={tag} className="rounded-lg bg-[var(--color-primary)] px-3 py-2 text-base font-black text-[var(--color-primary-dark)]">#{tag}</span>)}
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-4 text-sm font-black text-[var(--color-text)]">
               <Avatar />
@@ -133,7 +133,7 @@ function QuestionDetailsView({ slug }) {
             <p className="mt-5 text-base font-black leading-relaxed text-white/90">{question.body}</p>
           </section>
 
-          {actionError ? <p className="border border-[#ff6b82] bg-[#3d1622] p-3 text-sm font-black text-[#ffadb6]">{actionError}</p> : null}
+          {actionError ? <p className="border border-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_12%,var(--color-surface))] p-3 text-sm font-black text-[var(--color-danger)]">{actionError}</p> : null}
 
           <h2 className="text-xl font-black text-white">{answerCount} Answers</h2>
           {answers.length
@@ -180,7 +180,7 @@ function AnswerCard({ answer, voteState, onToggleVote }) {
       <p className="mt-5 text-base font-black leading-relaxed text-white/90">{answer.body}</p>
       <div className="mt-5 flex flex-wrap gap-3">
         <Button variant="secondary" onClick={() => onToggleVote(answer)} disabled={currentVoteState.pending}><ThumbsUp size={18} />{currentVoteState.upvoted ? 'Upvoted' : upvoteLabel}</Button>
-        {answer.isHelpful ? <span className="inline-flex min-h-11 items-center rounded-full bg-[#009a8d] px-4 font-black text-white">Helpful Answer</span> : null}
+        {answer.isHelpful ? <span className="inline-flex min-h-11 items-center rounded-lg bg-[var(--color-surface-muted)] px-4 font-black text-[var(--color-text)]">Helpful Answer</span> : null}
       </div>
     </article>
   )
@@ -192,7 +192,7 @@ function QuestionDetails() {
 }
 
 function Avatar() {
-  return <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#260777] text-[var(--color-primary-light)]"><UserRound size={21} /></span>
+  return <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-primary-light)]"><UserRound size={21} /></span>
 }
 
 export default QuestionDetails

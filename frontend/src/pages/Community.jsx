@@ -59,7 +59,7 @@ function Community() {
                 key={tab}
                 type="button"
                 onClick={() => setActiveTab(tab)}
-                className={`min-h-12 border-2 px-5 font-black ${activeTab === tab ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border-strong)] text-[var(--color-text)]'}`}
+                className={`min-h-12 rounded-lg border px-5 font-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] ${activeTab === tab ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-dark)]' : 'border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-text)] hover:bg-[var(--color-blue-hover)]'}`}
               >
                 {tab}
               </button>
@@ -68,7 +68,7 @@ function Community() {
 
           <section className="mt-4 space-y-3">
             {loading ? <div className="flex justify-center border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5"><Spinner label="Loading questions" /></div> : null}
-            {!loading && error ? <p role="alert" className="border-2 border-[#ff6b82] bg-[#3d1622] p-5 font-black text-[#ffadb6]">{error}</p> : null}
+            {!loading && error ? <p role="alert" className="border-2 border-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_12%,var(--color-surface))] p-5 font-black text-[var(--color-danger)]">{error}</p> : null}
             {!loading && !error && visibleQuestions.length === 0 ? <p className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 font-black text-[var(--color-text)]">No questions have been posted yet.</p> : null}
             {!loading && !error ? visibleQuestions.map((question) => <CommunityQuestionCard key={question.id} question={question} />) : null}
           </section>
@@ -79,8 +79,8 @@ function Community() {
             <h2 className="font-black text-white">Trending Topics</h2>
             <div className="mt-3 h-px bg-[var(--color-border-strong)]" />
             <div className="mt-3 flex flex-wrap gap-2">
-              {topics.map((topic, index) => (
-                <Link key={topic} to={`/explore?subject=${topic.toLowerCase()}`} className={`rounded-full px-3 py-2 text-base font-black text-white ${['bg-[#0878c9]', 'bg-[#009a8d]', 'bg-[#763800]', 'bg-[#b00075]', 'bg-[#5b28df]', 'bg-[#b00031]'][index]}`}>
+              {topics.map((topic) => (
+                <Link key={topic} to={`/explore?subject=${topic.toLowerCase()}`} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-base font-black text-[var(--color-text)] hover:bg-[var(--color-blue-hover)]">
                   #{topic}
                 </Link>
               ))}
@@ -107,7 +107,7 @@ function CommunityQuestionCard({ question }) {
       </div>
       <div className="min-w-0">
         <h2 className="break-words text-base font-black text-white">{question.title}</h2>
-        <div className="mt-3 flex flex-wrap gap-2">{question.tags.map((tag) => <span key={tag} className="rounded-full bg-[var(--color-primary)] px-3 py-1 font-black text-white">#{tag}</span>)}</div>
+        <div className="mt-3 flex flex-wrap gap-2">{question.tags.map((tag) => <span key={tag} className="rounded-lg bg-[var(--color-primary)] px-3 py-1 font-black text-[var(--color-primary-dark)]">#{tag}</span>)}</div>
         <p className="mt-3 text-sm font-black text-[var(--color-text)]">Asked by {author?.name || 'StudyMate member'} - {question.createdAt || 'Date unavailable'}</p>
       </div>
       <div className="text-left sm:text-center">

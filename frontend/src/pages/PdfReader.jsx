@@ -65,7 +65,7 @@ function PdfReader() {
     <div className="mx-auto w-full max-w-[1100px] px-5 py-8 sm:px-8">
       <Link to={`/resources/${resource.slug}`} className="text-sm font-black text-[var(--color-primary-light)]">Back to resource</Link>
       <h1 className="mt-4 text-3xl font-black text-white">{resource.title}</h1>
-      <div className="mt-6 min-h-[640px] border-2 border-[var(--color-border)] bg-[#1f2f3a] p-5">
+      <div className="mt-6 min-h-[640px] border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
         {!resource.resourceUrl
           ? <ReaderNotice message="Media is not available for this resource." />
           : isPdf
@@ -73,7 +73,7 @@ function PdfReader() {
               ? <ReaderNotice message="This PDF could not be displayed in the browser." action={<MediaFallbackLink url={resource.resourceUrl} /> } />
               : <PdfDocumentViewer url={resource.resourceUrl} onReady={markMediaReady} onError={markMediaError} />
             : isLink
-              ? <ReaderNotice message="This is an external resource link." action={<a href={resource.resourceUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex min-h-11 items-center border border-[var(--color-primary)] bg-[var(--color-primary)] px-5 font-black text-white">Open external link</a>} />
+              ? <ReaderNotice message="This is an external resource link." action={<a href={resource.resourceUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex min-h-11 items-center rounded-xl border border-[var(--color-primary)] bg-[var(--color-primary)] px-5 font-black text-white">Open external link</a>} />
               : <ReaderNotice message="This file type cannot be previewed inside the browser. Return to the resource page to use Download." action={<MediaFallbackLink url={resource.resourceUrl} />} />}
       </div>
     </div>
@@ -81,7 +81,7 @@ function PdfReader() {
 }
 
 function MediaFallbackLink({ url }) {
-  return <a href={url} target="_blank" rel="noreferrer" className="mt-5 inline-flex min-h-11 items-center border border-[var(--color-primary)] bg-[var(--color-primary)] px-5 font-black text-white">Open or download file</a>
+  return <a href={url} target="_blank" rel="noreferrer" className="mt-5 inline-flex min-h-11 items-center rounded-xl border border-[var(--color-primary)] bg-[var(--color-primary)] px-5 font-black text-white">Open or download file</a>
 }
 
 function getFileExtension(value) {

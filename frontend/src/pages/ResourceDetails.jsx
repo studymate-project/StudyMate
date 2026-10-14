@@ -4,11 +4,11 @@ import { getApiErrorMessage } from '../api'
 import { deleteResourceRating, getResourceBySlug, saveResourceRating, trackResourceView } from '../api/resources'
 import { useAuth } from '../auth/useAuth'
 import RatingControl from '../components/common/RatingControl'
+import DiscussionPanel from '../components/common/DiscussionPanel'
 import Spinner from '../components/common/Spinner'
 import PdfPreview from '../components/resources/PdfPreview'
 import RelatedResourceList from '../components/resources/RelatedResourceList'
 import ResourceHeader from '../components/resources/ResourceHeader'
-import ResourceStats from '../components/resources/ResourceStats'
 import TagList from '../components/resources/TagList'
 import UploaderCard from '../components/resources/UploaderCard'
 
@@ -24,7 +24,7 @@ const initialState = {
 function ResourceMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
   return (
     <div className="mx-auto flex w-full max-w-[900px] justify-center px-5 py-20 text-center sm:px-8">
-      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Link className="mt-7 inline-flex min-h-11 items-center border border-[var(--color-primary)] bg-[var(--color-primary)] px-5 font-black text-white" to="/explore">Back to Explore</Link> : null}</div>}
+      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Link className="mt-7 inline-flex min-h-11 items-center rounded-xl border border-[var(--color-primary)] bg-[var(--color-primary)] px-5 font-black text-white" to="/explore">Back to Explore</Link> : null}</div>}
     </div>
   )
 }
@@ -48,6 +48,40 @@ function SidebarLinkList({ title, items, pathPrefix }) {
         ))}
       </div>
     </aside>
+  )
+}
+
+function ExpandableDescription({ heading, description, stats = [] }) {
+  const [expanded, setExpanded] = useState(false)
+  const text = typeof description === 'string' ? description.trim() : ''
+
+  return (
+    <div className="mt-6">
+      <h2 className="text-base font-black text-white">{heading}</h2>
+      <p className={`mt-3 min-h-[2.75rem] text-base font-black leading-relaxed text-white/90 ${text && !expanded ? 'line-clamp-2' : ''}`}>
+        {text || 'No description available.'}
+      </p>
+      {text ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          className="mt-2 text-sm font-black text-[var(--color-primary-light)] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
+        >
+          {expanded ? 'Less' : 'More'}
+        </button>
+      ) : null}
+      {stats.length ? (
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-black text-[var(--color-text)]" aria-label="Resource statistics">
+          {stats.map((stat, index) => (
+            <span key={stat.label} className="inline-flex items-center gap-3">
+              {index ? <span aria-hidden="true">·</span> : null}
+              <span>{stat.label}: {stat.value}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -170,20 +204,26 @@ function ResourceDetailsView({ slug }) {
 
       <div className="mt-5 grid gap-9 lg:grid-cols-[minmax(0,1fr)_330px]">
         <div className="min-w-0 space-y-6">
-          <ResourceHeader resource={resource} author={resource.author} onDownloadCountChange={setDownloadCount} />
+          <ResourceHeader
+            resource={resource}
+            author={resource.author}
+            onDownloadCountChange={setDownloadCount}
+            descriptionContent={<ExpandableDescription heading="Description" description={resource.description} stats={stats} />}
+          />
           <RatingControl
+            key={`resource-rating-${resource.id}-${userRating ?? 'none'}`}
             itemLabel="resource"
             value={userRating}
             authStatus={authStatus}
             isSaving={ratingState === 'loading'}
             error={ratingError}
             notice={ratingNotice}
-            onChange={handleRatingChange}
+            onSubmit={handleRatingChange}
             onDelete={handleRatingDelete}
           />
-          <ResourceStats stats={stats} />
           <PdfPreview resourceSlug={resource.slug} resourceUrl={resource.resourceUrl} resourceType={resource.resourceType} />
           <TagList tags={resource.tags} />
+          <DiscussionPanel itemLabel="this resource" targetType="resource" targetId={resource.id} authStatus={authStatus} />
         </div>
         <div className="space-y-6">
           <UploaderCard user={resource.author} />

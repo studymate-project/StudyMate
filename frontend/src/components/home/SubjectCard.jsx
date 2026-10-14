@@ -28,13 +28,13 @@ function SubjectCard({ subject, compact = false }) {
   return (
     <Link
       to={`/explore?subject=${subject.slug || subject.name.toLowerCase()}`}
-      className={`${subject.colorClass} block min-h-[88px] p-5 text-white transition-transform hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]`}
+      className={`${subject.colorClass} block min-h-[88px] rounded-xl p-5 text-[var(--color-text)] transition-colors hover:bg-[var(--color-blue-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]`}
     >
       <div className="flex items-start gap-2">
-        <Icon size={compact ? 17 : 18} className="mt-0.5 shrink-0 text-white/90" />
+        <Icon size={compact ? 17 : 18} className="mt-0.5 shrink-0 text-[var(--color-teal)]" />
         <div className="min-w-0">
           <h3 className={`${compact ? 'text-base' : 'text-lg'} font-black leading-tight`}>{subject.name}</h3>
-          <p className="mt-3 text-sm font-black text-white/90">{subject.count}</p>
+          <p className="mt-3 text-sm font-black text-[var(--color-text-dim)]">{subject.count}</p>
         </div>
       </div>
     </Link>

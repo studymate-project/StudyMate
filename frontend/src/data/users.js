@@ -9,7 +9,7 @@ export const users = [
     points: 420,
     questions: 6,
     answers: 14,
-    avatarColor: 'bg-[#260777]',
+    avatarColor: 'bg-[var(--color-primary-soft)]',
   },
   {
     id: 'user-002',
@@ -21,7 +21,7 @@ export const users = [
     points: 380,
     questions: 4,
     answers: 18,
-    avatarColor: 'bg-[#260777]',
+    avatarColor: 'bg-[var(--color-teal-soft)]',
   },
   {
     id: 'user-003',
@@ -33,7 +33,7 @@ export const users = [
     points: 310,
     questions: 3,
     answers: 21,
-    avatarColor: 'bg-[#260777]',
+    avatarColor: 'bg-[var(--color-purple-soft)]',
   },
   {
     id: 'user-004',
@@ -45,7 +45,7 @@ export const users = [
     points: 290,
     questions: 5,
     answers: 11,
-    avatarColor: 'bg-[#260777]',
+    avatarColor: 'bg-[var(--color-primary-soft)]',
   },
   {
     id: 'user-005',
@@ -57,7 +57,7 @@ export const users = [
     points: 260,
     questions: 2,
     answers: 9,
-    avatarColor: 'bg-[#073c68]',
+    avatarColor: 'bg-[var(--color-teal-soft)]',
   },
   {
     id: 'user-006',
@@ -69,7 +69,7 @@ export const users = [
     points: 245,
     questions: 8,
     answers: 7,
-    avatarColor: 'bg-[#005448]',
+    avatarColor: 'bg-[var(--color-purple-soft)]',
   },
   {
     id: 'user-007',
@@ -81,6 +81,6 @@ export const users = [
     points: 335,
     questions: 4,
     answers: 16,
-    avatarColor: 'bg-[#260777]',
+    avatarColor: 'bg-[var(--color-primary-soft)]',
   },
 ]

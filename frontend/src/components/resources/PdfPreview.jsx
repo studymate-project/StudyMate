@@ -10,7 +10,7 @@ function PdfPreview({ resourceSlug, resourceUrl, resourceType }) {
       <FileText size={58} className="text-[var(--color-text)]" />
       <p className="mt-4 text-base font-black text-[var(--color-text)]">{isPdf ? 'PDF Preview - Click to expand' : isLink ? 'External Resource' : 'Document Preview - Click to open'}</p>
       <Button className="mt-4" to={`/resources/${resourceSlug}/read`} disabled={!resourceUrl}>{isPdf ? 'Open Full PDF Reader' : isLink ? 'Open Link Reader' : 'Open Document Reader'}</Button>
-      {!resourceUrl ? <p className="mt-3 text-sm font-bold text-[#ffadb6]">Media is not available for this resource.</p> : null}
+      {!resourceUrl ? <p className="mt-3 text-sm font-bold text-[var(--color-danger)]">Media is not available for this resource.</p> : null}
     </section>
   )
 }

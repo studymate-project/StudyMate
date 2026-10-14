@@ -68,6 +68,22 @@ export function createVideo(payload) {
   return apiClient.post('/videos/', payload).then((response) => normalizeVideo(response.data))
 }
 
+export function listVideos(params = {}) {
+  return apiClient.get('/videos/', { params }).then((response) => {
+    const data = response.data
+    const results = Array.isArray(data) ? data : data?.results || []
+
+    return {
+      videos: results.map(normalizeVideo),
+      pagination: {
+        count: Array.isArray(data) ? results.length : data?.count || 0,
+        next: Array.isArray(data) ? null : data?.next || null,
+        previous: Array.isArray(data) ? null : data?.previous || null,
+      },
+    }
+  })
+}
+
 export function getVideoBySlug(slug) {
   const normalizedSlug = slug?.trim()
   if (!normalizedSlug) return Promise.reject(new Error('A video slug is required.'))

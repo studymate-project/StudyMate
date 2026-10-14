@@ -15,7 +15,7 @@ function RelatedResourceList({ resources }) {
             to={`/resources/${resource.slug}`}
             className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-2 border-[var(--color-border)] p-3 transition-colors hover:border-[var(--color-primary-light)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
           >
-            <FileText size={21} className="text-[#58a7df]" />
+            <FileText size={21} className="text-[var(--color-text)]" />
             <div className="min-w-0">
               <h3 className="text-sm font-black leading-tight text-white">{resource.title}</h3>
               <p className="text-sm font-black text-[var(--color-text)]">{resource.type}</p>

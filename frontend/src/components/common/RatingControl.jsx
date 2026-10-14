@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import Rating from './Rating'
 
@@ -8,10 +9,16 @@ function RatingControl({
   isSaving,
   error,
   notice,
-  onChange,
+  onSubmit,
   onDelete,
 }) {
   const isAuthenticated = authStatus === 'authenticated'
+  const [selectedRating, setSelectedRating] = useState(value ?? null)
+
+  const submitRating = () => {
+    if (!isAuthenticated || selectedRating == null || isSaving) return
+    onSubmit(selectedRating)
+  }
 
   return (
     <section className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5" aria-labelledby={`${itemLabel}-rating-title`}>
@@ -23,19 +30,20 @@ function RatingControl({
           </p>
         </div>
         <Rating
-          value={value}
+          value={selectedRating}
           interactive
           showValue={false}
           showCount={false}
-          onChange={onChange}
-          disabled={isSaving}
+          onChange={setSelectedRating}
+          disabled={!isAuthenticated || isSaving}
+          size={24}
           className="text-lg"
         />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-4 text-sm font-bold">
         <span className="text-[var(--color-text)]">
-          {value ? `Your rating: ${value}/5` : 'No rating selected'}
+          {selectedRating ? `Selected rating: ${selectedRating}/5` : 'No rating selected'}
         </span>
         {isAuthenticated && value != null ? (
           <button
@@ -53,8 +61,19 @@ function RatingControl({
         ) : null}
       </div>
 
+      {isAuthenticated ? (
+        <button
+          type="button"
+          onClick={submitRating}
+          disabled={isSaving || selectedRating == null}
+          className="mt-4 inline-flex min-h-10 items-center rounded-lg border border-[var(--color-primary)] bg-[var(--color-primary)] px-4 text-sm font-black text-[var(--color-primary-dark)] transition-colors hover:bg-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSaving ? 'Submitting...' : 'Submit rating'}
+        </button>
+      ) : null}
+
       {notice ? <p role="status" className="mt-3 text-sm font-bold text-[var(--color-primary-light)]">{notice}</p> : null}
-      {error ? <p role="alert" className="mt-3 text-sm font-bold text-[#ffadb6]">{error}</p> : null}
+      {error ? <p role="alert" className="mt-3 text-sm font-bold text-[var(--color-danger)]">{error}</p> : null}
     </section>
   )
 }
