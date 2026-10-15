@@ -15,12 +15,13 @@ function statusMessage(status, fallbackMessage) {
   if (status === 401) return 'Authentication failed. Please try again.'
   if (status === 403) return 'You are not allowed to perform this action.'
   if (status === 404) return 'The requested service was not found.'
+  if (status === 429) return 'Too many requests. Please wait a moment and try again.'
   return fallbackMessage
 }
 
 function getErrorMessage(data, status, fallbackMessage) {
   const safeStatusMessage = statusMessage(status, fallbackMessage)
-  if (status >= 500 || status === 401 || status === 403 || status === 404) return safeStatusMessage
+  if (status >= 500 || status === 401 || status === 403 || status === 404 || status === 429) return safeStatusMessage
   if (typeof data === 'string' && data && !isUnsafeText(data)) return data
   if (!data || typeof data !== 'object') return fallbackMessage
 

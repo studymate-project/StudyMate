@@ -20,7 +20,17 @@ export async function login(credentials) {
 
 export async function signup(payload) {
   const response = await apiClient.post('/auth/signup/', payload)
-  return response.data
+  return { ...response.data, status: response.status }
+}
+
+export async function requestSignupVerification(payload) {
+  const response = await apiClient.post('/auth/signup/verification/request/', payload)
+  return { ...response.data, status: response.status }
+}
+
+export async function verifySignupEmail(payload) {
+  const response = await apiClient.post('/auth/signup/verification/verify/', payload)
+  return { ...response.data, status: response.status }
 }
 
 export async function getCurrentUser(config) {

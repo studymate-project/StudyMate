@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { listVideos } from '../api/videos'
 import ResourceList from '../components/explore/ResourceList'
-import SubjectGrid from '../components/explore/SubjectGrid'
 import VideoList from '../components/explore/VideoList'
 
 const sortTabs = ['Most Popular', 'Latest', 'Top Rated', 'Most Downloaded']
@@ -115,7 +114,7 @@ function Explore() {
   const videoError = showVideos && videoState.requestKey === videoRequestKey ? videoState.error : null
 
   return (
-    <div className="mx-auto w-full max-w-[1260px]">
+    <div className="mx-auto w-full max-w-315">
       <section className="min-w-0 px-5 py-8 sm:px-8 lg:px-10">
         <h1 className="text-3xl font-black text-white sm:text-4xl">Explore Study Resources</h1>
 
@@ -164,7 +163,6 @@ function Explore() {
           })}
         </div>
 
-        <SubjectGrid />
         {showVideos ? <VideoList videos={videoState.videos} loading={videoLoading} error={videoError} /> : <ResourceList resources={resourceRequest.resources} loading={resourceRequest.loading} error={resourceRequest.error} />}
       </section>
     </div>

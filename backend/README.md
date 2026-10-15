@@ -122,6 +122,10 @@ Required Render environment variables:
 - `JWT_COOKIE_SECURE=True`.
 - `JWT_COOKIE_SAMESITE=None`.
 - `JWT_TOKEN_BLACKLIST_ENABLED=True`.
+- `REDIS_URL`: Upstash `rediss://` URL for the shared cache.
+- `CELERY_BROKER_URL`: Upstash `rediss://` broker URL, unless the worker intentionally reuses `REDIS_URL`.
+- `DEFAULT_FROM_EMAIL`.
+- `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, and the appropriate `EMAIL_USE_TLS` or `EMAIL_USE_SSL` setting.
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`.
 - `LOG_LEVEL=INFO`.
 
@@ -186,5 +190,43 @@ unsafe cookie-authenticated requests. Future APIs can be grouped under `/api/aut
 `/api/notifications/`, and `/api/search/`.
 
 The backend includes the domain models, migrations, authentication/JWT flow,
-uploads, and an optional Cloudinary storage foundation. Redis and Celery have
-not been implemented.
+uploads, Cloudinary storage, and Celery-backed signup verification email
+delivery. Signup OTPs are sent by a separate worker through Django's configured
+email backend; the web process never sends them synchronously.
+
+## Celery and Upstash Redis
+
+Set `CELERY_BROKER_URL` to an Upstash TLS connection URL. The existing
+`REDIS_URL` is used as a fallback so one Upstash database can support both the
+cache and Celery, but a separate broker URL may be configured when preferred.
+Do not commit the password. The expected format is:
+
+```text
+rediss://default:<UPSTASH_PASSWORD>@<UPSTASH_ENDPOINT>:6379/0?ssl_cert_reqs=required
+```
+
+URL-encode the password when it contains reserved URL characters. Production
+requires the `rediss://` TLS scheme. Configure `DEFAULT_FROM_EMAIL` and the
+normal Django email-backend/SMTP variables as well.
+
+Run a worker locally from `backend/` with:
+
+```powershell
+python -m celery -A backend.celery worker --loglevel=INFO
+```
+
+Production needs a separate long-running worker process using the same command
+(and the production environment variables); the existing Gunicorn web
+process does not run Celery workers. For Render, create a separate Background
+Worker service with root directory `backend`, the same environment variables as
+the web service, and this Start Command:
+
+```text
+sh worker.sh
+```
+
+The committed `worker.sh` entrypoint keeps the worker command consistent across
+local development and production. Deploy the web service first so its startup
+migration completes, then start the worker service. A deployment must apply
+committed Django migrations, including the signup verification migration,
+before serving traffic.

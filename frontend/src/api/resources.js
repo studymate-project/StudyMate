@@ -171,6 +171,10 @@ export function listResources(params = {}) {
   return request
 }
 
+export function listSubjectRecommendations(limit = 12) {
+  return apiClient.get('/resources/subjects/', { params: { limit } }).then((response) => response.data)
+}
+
 export function clearResourceListCache() {
   resourceListCache.clear()
   inFlightRequests.clear()

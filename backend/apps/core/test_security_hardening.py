@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
@@ -109,22 +111,35 @@ class AuthenticationCSRFTests(TestCase):
         self.assertEqual(csrf_cookie["path"], "/")
 
         csrf_token = bootstrap.data["csrf_token"]
-        signup = self.client.post(
-            "/api/auth/signup/",
-            {
-                "name": "Cross Origin Student",
-                "email": "cross-origin-student@example.com",
-                "password": "A-strong-cross-origin-password-42!",
-                "country": "India",
-                "state": "Delhi",
-                "city": "New Delhi",
-            },
+        with patch("apps.users.tasks.send_signup_verification_email_task.delay") as enqueue:
+            with self.captureOnCommitCallbacks(execute=True):
+                signup = self.client.post(
+                    "/api/auth/signup/",
+                    {
+                        "name": "Cross Origin Student",
+                        "email": "cross-origin-student@example.com",
+                        "password": "A-strong-cross-origin-password-42!",
+                        "country": "India",
+                        "state": "Delhi",
+                        "city": "New Delhi",
+                    },
+                    format="json",
+                    HTTP_ORIGIN=origin,
+                    HTTP_X_CSRFTOKEN=csrf_token,
+                )
+        self.assertEqual(signup.status_code, 202, signup.data)
+        enqueue.assert_called_once()
+        verification_code = enqueue.call_args.args[1]
+        username = get_user_model().objects.get(email="cross-origin-student@example.com").username
+
+        verify = self.client.post(
+            "/api/auth/signup/verification/verify/",
+            {"email": "cross-origin-student@example.com", "code": verification_code},
             format="json",
             HTTP_ORIGIN=origin,
             HTTP_X_CSRFTOKEN=csrf_token,
         )
-        self.assertEqual(signup.status_code, 201, signup.data)
-        username = signup.data["user"]["username"]
+        self.assertEqual(verify.status_code, 200, verify.data)
 
         login = self.client.post(
             "/api/auth/login/",

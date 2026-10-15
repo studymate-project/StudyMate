@@ -1,5 +1,6 @@
 """Settings for the StudyMate Django API."""
 
+import ssl
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -174,6 +175,44 @@ def _build_cache_config(redis_url: str, debug: bool) -> dict:
 REDIS_URL = env('REDIS_URL', default='').strip()
 CACHES = _build_cache_config(REDIS_URL, DEBUG)
 
+# Celery uses a dedicated setting so the worker can use a separate broker when
+# desired. Falling back to REDIS_URL keeps the existing Upstash cache setup
+# usable without duplicating a secret in deployment configuration.
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL).strip()
+if CELERY_BROKER_URL:
+    celery_broker_scheme = urlsplit(CELERY_BROKER_URL).scheme.casefold()
+    if celery_broker_scheme not in {'redis', 'rediss'}:
+        raise ImproperlyConfigured(
+            'CELERY_BROKER_URL must use redis:// or rediss://.'
+        )
+    if not DEBUG and celery_broker_scheme != 'rediss':
+        raise ImproperlyConfigured(
+            'Production CELERY_BROKER_URL must use the rediss:// TLS scheme.'
+        )
+    if celery_broker_scheme == 'rediss':
+        CELERY_BROKER_USE_SSL = {'ssl_cert_reqs': ssl.CERT_REQUIRED}
+
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# Email backend configuration is environment-driven so the Celery worker and
+# web process use the same delivery settings. Tests override EMAIL_BACKEND
+# with Django's locmem backend.
+EMAIL_BACKEND = env(
+    'EMAIL_BACKEND',
+    default='django.core.mail.backends.smtp.EmailBackend',
+)
+EMAIL_HOST = env('EMAIL_HOST', default='')
+EMAIL_PORT = env.int('EMAIL_PORT', default=25)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=False)
+EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)
+EMAIL_TIMEOUT = env.int('EMAIL_TIMEOUT', default=10)
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
@@ -283,6 +322,29 @@ if CLOUDINARY_CONFIGURED:
     }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Signup verification uses Django's configured email backend. Deployments can
+# provide their normal SMTP/backend settings without changing application code.
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='no-reply@studymate.local')
+SIGNUP_OTP_LENGTH = env.int('SIGNUP_OTP_LENGTH', default=6)
+SIGNUP_OTP_TTL_SECONDS = env.int('SIGNUP_OTP_TTL_SECONDS', default=600)
+SIGNUP_OTP_MAX_ATTEMPTS = env.int('SIGNUP_OTP_MAX_ATTEMPTS', default=5)
+SIGNUP_OTP_RESEND_COOLDOWN_SECONDS = env.int(
+    'SIGNUP_OTP_RESEND_COOLDOWN_SECONDS', default=60
+)
+SIGNUP_OTP_EMAIL_RATE_LIMIT = env.int('SIGNUP_OTP_EMAIL_RATE_LIMIT', default=5)
+SIGNUP_OTP_EMAIL_RATE_WINDOW_SECONDS = env.int(
+    'SIGNUP_OTP_EMAIL_RATE_WINDOW_SECONDS', default=3600
+)
+
+if not 4 <= SIGNUP_OTP_LENGTH <= 8:
+    raise ImproperlyConfigured('SIGNUP_OTP_LENGTH must be between 4 and 8 digits.')
+if SIGNUP_OTP_TTL_SECONDS <= 0 or SIGNUP_OTP_MAX_ATTEMPTS <= 0:
+    raise ImproperlyConfigured('Signup OTP expiry and attempt limits must be positive.')
+if SIGNUP_OTP_RESEND_COOLDOWN_SECONDS < 0:
+    raise ImproperlyConfigured('SIGNUP_OTP_RESEND_COOLDOWN_SECONDS cannot be negative.')
+if SIGNUP_OTP_EMAIL_RATE_LIMIT <= 0 or SIGNUP_OTP_EMAIL_RATE_WINDOW_SECONDS <= 0:
+    raise ImproperlyConfigured('Signup OTP email rate settings must be positive.')
 
 # CORS is deliberately limited to the configured frontend origin. Credentials
 # are enabled for the HTTP-only-cookie authentication design.
@@ -532,6 +594,12 @@ REST_FRAMEWORK = {
         # Narrower buckets protect state-changing and authentication endpoints.
         'auth_login': env('THROTTLE_AUTH_LOGIN_RATE', default='30/minute'),
         'auth_signup': env('THROTTLE_AUTH_SIGNUP_RATE', default='20/hour'),
+        'auth_signup_verification_request': env(
+            'THROTTLE_AUTH_SIGNUP_VERIFICATION_REQUEST_RATE', default='10/hour'
+        ),
+        'auth_signup_verification_verify': env(
+            'THROTTLE_AUTH_SIGNUP_VERIFICATION_VERIFY_RATE', default='30/hour'
+        ),
         'auth_refresh': env('THROTTLE_AUTH_REFRESH_RATE', default='60/minute'),
         'resource_write': env('THROTTLE_RESOURCE_WRITE_RATE', default='60/hour'),
         'question_write': env('THROTTLE_QUESTION_WRITE_RATE', default='60/hour'),

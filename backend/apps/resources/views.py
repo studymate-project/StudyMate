@@ -1,3 +1,6 @@
+import math
+from datetime import timedelta
+
 from django.conf import settings
 from django.db.models import (
     Avg,
@@ -8,6 +11,7 @@ from django.db.models import (
     F,
     FloatField,
     IntegerField,
+    Min,
     OuterRef,
     Q,
     Subquery,
@@ -15,8 +19,10 @@ from django.db.models import (
     When,
 )
 from django.db import transaction
-from django.db.models.functions import Cast, Coalesce, Ln
+from django.db.models.functions import Cast, Coalesce, Lower, Ln, Trim
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.utils.text import slugify
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiTypes,
@@ -32,9 +38,11 @@ from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveMode
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
+from rest_framework.decorators import action
 
 from apps.core.permissions import IsResourceOwnerOrReadOnly, IsVideoOwnerOrReadOnly
 from apps.core.schema import BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHENTICATED
+from apps.education.models import Interest
 from apps.interactions.models import ResourceRating, ResourceUpvote, SavedResource
 from apps.interactions.serializers import ResourceRatingSerializer, SavedResourceSerializer
 
@@ -46,6 +54,9 @@ from .services.cloudinary import discard_cloudinary_reference, is_cloudinary_ref
 POPULARITY_VIEW_WEIGHT = 0.4
 POPULARITY_SAVE_WEIGHT = 0.3
 POPULARITY_UPVOTE_WEIGHT = 0.3
+SUBJECT_RECOMMENDATION_LIMIT = 12
+SUBJECT_TRENDING_LIMIT = 3
+SUBJECT_RECENT_WINDOW = timedelta(days=30)
 
 
 def _rating_annotations(target_field: str) -> dict[str, object]:
@@ -89,6 +100,227 @@ def _resource_metric_annotations() -> dict[str, object]:
         "_save_count": Count("saved_by", distinct=True),
         "_upvote_count": Count("upvotes", distinct=True),
         **_rating_annotations("resource"),
+    }
+
+
+def _subject_key(value: str) -> str:
+    return " ".join(value.casefold().split())
+
+
+def _empty_subject_stats(name: str) -> dict[str, object]:
+    return {
+        "name": name,
+        "content_count": 0,
+        "resource_count": 0,
+        "video_count": 0,
+        "views": 0,
+        "downloads": 0,
+        "saves": 0,
+        "upvotes": 0,
+        "ratings": 0,
+        "discussion_comments": 0,
+        "discussion_likes": 0,
+        "recent_content": 0,
+        "recent_engagement": 0,
+    }
+
+
+def _merge_subject_stats(subject_stats: dict[str, dict[str, object]], rows, content_type: str) -> None:
+    for row in rows:
+        key = row["subject_key"]
+        stats = subject_stats.setdefault(key, _empty_subject_stats(row["name"]))
+        stats["name"] = min(stats["name"], row["name"])
+        stats["content_count"] += int(row["content_count"] or 0)
+        stats[f"{content_type}_count"] += int(row["content_count"] or 0)
+        for field in ("views", "downloads", "saves", "recent_content", "recent_engagement"):
+            stats[field] += int(row[field] or 0)
+        stats["upvotes"] += int(row["upvote_events"] or 0)
+        stats["ratings"] += int(row["rating_events"] or 0)
+        stats["discussion_comments"] += int(row["discussion_comment_events"] or 0)
+        stats["discussion_likes"] += int(row["discussion_like_events"] or 0)
+
+
+def _resource_subject_stats(recent_cutoff):
+    discussion_filter = Q(discussion_comments__status=PublicationStatus.PUBLISHED)
+    return Resource.objects.filter(status=PublicationStatus.PUBLISHED).annotate(
+        subject_key=Lower(Trim("subject")),
+    ).values("subject_key").annotate(
+        name=Min("subject"),
+        content_count=Count("pk", distinct=True),
+        views=Count("view_events", distinct=True),
+        downloads=Count("download_events", distinct=True),
+        saves=Count("saved_by", distinct=True),
+        upvote_events=Count("upvotes", distinct=True),
+        rating_events=Count("ratings", distinct=True),
+        discussion_comment_events=Count("discussion_comments", filter=discussion_filter, distinct=True),
+        discussion_like_events=Count("discussion_comments__likes", filter=discussion_filter, distinct=True),
+        recent_content=Count("pk", filter=Q(created_at__gte=recent_cutoff), distinct=True),
+        recent_engagement=(
+            Count("view_events", filter=Q(view_events__viewed_at__gte=recent_cutoff), distinct=True)
+            + Count("download_events", filter=Q(download_events__downloaded_at__gte=recent_cutoff), distinct=True)
+            + Count("saved_by", filter=Q(saved_by__created_at__gte=recent_cutoff), distinct=True)
+            + Count("upvotes", filter=Q(upvotes__created_at__gte=recent_cutoff), distinct=True)
+            + Count("ratings", filter=Q(ratings__created_at__gte=recent_cutoff), distinct=True)
+            + Count(
+                "discussion_comments",
+                filter=discussion_filter & Q(discussion_comments__created_at__gte=recent_cutoff),
+                distinct=True,
+            )
+        ),
+    )
+
+
+def _video_subject_stats(recent_cutoff):
+    discussion_filter = Q(discussion_comments__status=PublicationStatus.PUBLISHED)
+    return Video.objects.filter(status=PublicationStatus.PUBLISHED).annotate(
+        subject_key=Lower(Trim("subject")),
+    ).values("subject_key").annotate(
+        name=Min("subject"),
+        content_count=Count("pk", distinct=True),
+        views=Value(0, output_field=IntegerField()),
+        downloads=Value(0, output_field=IntegerField()),
+        saves=Value(0, output_field=IntegerField()),
+        upvote_events=Value(0, output_field=IntegerField()),
+        rating_events=Count("ratings", distinct=True),
+        discussion_comment_events=Count("discussion_comments", filter=discussion_filter, distinct=True),
+        discussion_like_events=Count("discussion_comments__likes", filter=discussion_filter, distinct=True),
+        recent_content=Count("pk", filter=Q(created_at__gte=recent_cutoff), distinct=True),
+        recent_engagement=(
+            Count("ratings", filter=Q(ratings__created_at__gte=recent_cutoff), distinct=True)
+            + Count(
+                "discussion_comments",
+                filter=discussion_filter & Q(discussion_comments__created_at__gte=recent_cutoff),
+                distinct=True,
+            )
+        ),
+    )
+
+
+def _academic_subject_keys(profile):
+    exact_level = set()
+    course_level = set()
+    filters = Q()
+    if profile.academic_level_id:
+        filters |= Q(academic_level_id=profile.academic_level_id)
+    if profile.course_id:
+        filters |= Q(academic_level__course_id=profile.course_id)
+    if not filters:
+        return exact_level, course_level
+
+    for model in (Resource, Video):
+        rows = model.objects.filter(status=PublicationStatus.PUBLISHED).filter(filters).annotate(
+            subject_key=Lower(Trim("subject")),
+        ).values("subject_key", "academic_level_id", "academic_level__course_id").distinct()
+        for row in rows:
+            if profile.academic_level_id and row["academic_level_id"] == profile.academic_level_id:
+                exact_level.add(row["subject_key"])
+            if profile.course_id and row["academic_level__course_id"] == profile.course_id:
+                course_level.add(row["subject_key"])
+    return exact_level, course_level
+
+
+def _catalog_subject_keys(profile):
+    interest_keys = set()
+    course_interest_keys = set()
+    selected_subjects = {}
+    course_subjects = {}
+    if profile.student_interests.exists():
+        selected = profile.student_interests.select_related("interest").filter(interest__is_active=True)
+        for name, slug in selected.values_list("interest__name", "interest__slug"):
+            interest_keys.update({_subject_key(name), _subject_key(slug)})
+            selected_subjects[_subject_key(name)] = name
+    if profile.course_id:
+        course_interests = Interest.objects.filter(
+            is_active=True,
+            courses__pk=profile.course_id,
+        ).values_list("name", "slug")
+        for name, slug in course_interests:
+            course_interest_keys.update({_subject_key(name), _subject_key(slug)})
+            course_subjects[_subject_key(name)] = name
+    return interest_keys, course_interest_keys, selected_subjects, course_subjects
+
+
+def _subject_recommendation_score(stats, relevance):
+    popularity = (
+        POPULARITY_VIEW_WEIGHT * math.log1p(stats["views"])
+        + 0.15 * math.log1p(stats["downloads"])
+        + POPULARITY_SAVE_WEIGHT * math.log1p(stats["saves"])
+        + POPULARITY_UPVOTE_WEIGHT * math.log1p(stats["upvotes"])
+        + 0.1 * math.log1p(stats["ratings"] + stats["discussion_comments"] + stats["discussion_likes"])
+    )
+    recent = 0.5 * math.log1p(stats["recent_engagement"]) + 0.25 * math.log1p(stats["recent_content"])
+    return popularity + recent + relevance
+
+
+def _subject_recommendations(user, limit):
+    recent_cutoff = timezone.now() - SUBJECT_RECENT_WINDOW
+    subject_stats = {}
+    _merge_subject_stats(subject_stats, _resource_subject_stats(recent_cutoff), "resource")
+    _merge_subject_stats(subject_stats, _video_subject_stats(recent_cutoff), "video")
+
+    profile = getattr(user, "student_profile", None)
+    profile_complete = bool(profile and profile.onboarding_completed)
+    exact_level_keys = course_level_keys = interest_keys = course_interest_keys = set()
+    selected_subjects = {}
+    course_subjects = {}
+    if profile_complete:
+        exact_level_keys, course_level_keys = _academic_subject_keys(profile)
+        interest_keys, course_interest_keys, selected_subjects, course_subjects = _catalog_subject_keys(profile)
+        for key, name in {**course_subjects, **selected_subjects}.items():
+            subject_stats.setdefault(key, _empty_subject_stats(name))
+
+    recommendations = []
+    for key, stats in subject_stats.items():
+        relevance = 0
+        if key in exact_level_keys:
+            relevance += 2.0
+        elif key in course_level_keys:
+            relevance += 1.25
+        if key in interest_keys:
+            relevance += 1.5
+        elif key in course_interest_keys:
+            relevance += 0.75
+        stats["engagement_count"] = sum(
+            stats[field]
+            for field in ("views", "downloads", "saves", "upvotes", "ratings", "discussion_comments", "discussion_likes")
+        )
+        stats["score"] = _subject_recommendation_score(stats, relevance)
+        stats["relevance"] = relevance
+        recommendations.append((key, stats))
+
+    if profile_complete:
+        relevant = [item for item in recommendations if item[1]["relevance"] > 0]
+        if relevant:
+            other = [item for item in recommendations if item[1]["relevance"] == 0]
+            recommendations = relevant + other
+
+    recommendations.sort(key=lambda item: (-item[1]["score"], -item[1]["recent_engagement"], -item[1]["content_count"], item[1]["name"].casefold()))
+    trending_keys = {
+        key
+        for key, _ in sorted(
+            (item for item in recommendations if item[1]["recent_engagement"] > 0),
+            key=lambda item: (-item[1]["recent_engagement"], -item[1]["content_count"], item[1]["name"].casefold()),
+        )[:SUBJECT_TRENDING_LIMIT]
+    }
+
+    results = []
+    for key, stats in recommendations[:limit]:
+        results.append(
+            {
+                "name": stats["name"],
+                "slug": slugify(stats["name"]),
+                "content_count": stats["content_count"],
+                "engagement_count": stats["engagement_count"],
+                "recent_engagement_count": stats["recent_engagement"],
+                "is_personalized": stats["relevance"] > 0,
+                "is_trending": key in trending_keys,
+            }
+        )
+    return {
+        "results": results,
+        "count": len(results),
+        "profile_complete": profile_complete,
+        "has_interests": bool(interest_keys),
     }
 
 
@@ -425,9 +657,41 @@ class ResourceViewSet(ModelViewSet):
         )
 
     def get_permissions(self):
+        if self.action == "subject_recommendations":
+            return [IsAuthenticated()]
         if self.action in {"list", "retrieve"}:
             return [AllowAny()]
         return [IsAuthenticated(), IsResourceOwnerOrReadOnly()]
+
+    @extend_schema(
+        summary="Recommend subjects for the authenticated student",
+        description="Rank published subjects using academic-level relevance, selected/course interests, engagement, and recent activity.",
+        parameters=[
+            OpenApiParameter(
+                "limit",
+                OpenApiTypes.INT,
+                OpenApiParameter.QUERY,
+                description="Maximum number of subjects to return.",
+            ),
+        ],
+        responses=inline_serializer(
+            "SubjectRecommendationResponse",
+            fields={
+                "results": serializers.ListField(child=serializers.DictField()),
+                "count": serializers.IntegerField(),
+                "profile_complete": serializers.BooleanField(),
+                "has_interests": serializers.BooleanField(),
+            },
+        ),
+    )
+    @action(detail=False, methods=("get",), url_path="subjects")
+    def subject_recommendations(self, request):
+        raw_limit = request.query_params.get("limit", SUBJECT_RECOMMENDATION_LIMIT)
+        try:
+            limit = max(1, min(int(raw_limit), 24))
+        except (TypeError, ValueError):
+            limit = SUBJECT_RECOMMENDATION_LIMIT
+        return Response(_subject_recommendations(request.user, limit))
 
     def get_object(self):
         lookup = self.kwargs[self.lookup_url_kwarg]
@@ -517,7 +781,7 @@ class VideoViewSet(ListModelMixin, RetrieveModelMixin, CreateModelMixin, Generic
         return [IsAuthenticated(), IsVideoOwnerOrReadOnly()]
 
     def perform_create(self, serializer):
-        serializer.save(uploader=self.request.user)
+        serializer.save(uploader=self.request.user, status=PublicationStatus.PUBLISHED)
 
 
 class ResourceInteractionView(APIView):

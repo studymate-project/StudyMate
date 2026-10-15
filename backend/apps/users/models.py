@@ -110,3 +110,29 @@ class StudentProfile(models.Model):
 
     def __str__(self):
         return self.display_name or self.user.get_username()
+
+
+class SignupEmailVerification(models.Model):
+    """One-time state for an account that is waiting for email verification."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="signup_email_verification",
+    )
+    # Signup normalizes this value before saving. Keeping a unique copy makes
+    # concurrent pending signups for the same address converge on one record.
+    email = models.EmailField(max_length=254, unique=True)
+    otp_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["expires_at"])]
+
+    def __str__(self):
+        return f"Signup email verification for user {self.user_id}"

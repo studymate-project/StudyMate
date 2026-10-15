@@ -11,7 +11,7 @@ from rest_framework.test import APIClient
 
 from backend.settings import _build_storage_config
 
-from .models import PublicationStatus, Resource
+from .models import PublicationStatus, Resource, Video
 from .serializers import ResourceSerializer
 from .services.cloudinary import _storage_name
 
@@ -201,6 +201,7 @@ class ResourceFileValidationTests(TestCase):
         resource.refresh_from_db()
         self.assertFalse(resource.file)
 
+
     def test_retried_resource_create_returns_the_original_resource(self):
         owner = self._create_user("retry-owner")
         client = APIClient()
@@ -226,6 +227,34 @@ class ResourceFileValidationTests(TestCase):
         from django.contrib.auth.models import User
 
         return User.objects.create_user(username=username, password="not-used-in-test")
+
+
+class VideoPublishingTests(TestCase):
+    def test_video_upload_is_published_and_listed(self):
+        owner = User.objects.create_user("video-owner", password="not-used-in-test")
+        client = APIClient()
+        client.force_authenticate(user=owner)
+
+        response = client.post(
+            "/api/videos/",
+            {
+                "title": "Published video",
+                "description": "A test video",
+                "subject": "Physics",
+                "topic": "Motion",
+                "youtube_url": "https://www.youtube.com/watch?v=I9R9BhhuPlY",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        video = Video.objects.get(pk=response.data["id"])
+        self.assertEqual(video.status, PublicationStatus.PUBLISHED)
+
+        listed = APIClient().get("/api/videos/")
+
+        self.assertEqual(listed.status_code, 200, listed.data)
+        self.assertEqual([item["id"] for item in listed.data["results"]], [video.pk])
 
 
 class CloudinaryUploadServiceTests(TestCase):

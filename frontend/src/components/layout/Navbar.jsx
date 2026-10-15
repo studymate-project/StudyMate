@@ -70,7 +70,7 @@ function Navbar() {
         </div>
 
         <div className="ml-auto flex items-center gap-2 sm:ml-0">
-          <IconButton label="Search" className="sm:hidden">
+          <IconButton label="Search" className="sm:hidden" onClick={() => setMenuOpen(true)}>
             <Search size={20} />
           </IconButton>
           <Link to="/notifications" aria-label="Notifications" className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-[var(--color-text)] transition-colors hover:border-[var(--color-border)] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]"><Bell size={20} /></Link>

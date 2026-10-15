@@ -22,6 +22,7 @@ from apps.education.serializers import InterestSerializer as CatalogInterestSeri
 from apps.interactions.models import UserFollow
 
 from .models import StudentProfile
+from .services.verification import create_signup_verification
 from .avatar_validation import AvatarValidationError, validate_avatar_file
 from apps.resources.services.cloudinary import (
     CloudinaryUploadError,
@@ -47,6 +48,13 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     user = PublicUserSerializer(read_only=True)
     is_following = serializers.SerializerMethodField()
     interests = serializers.SerializerMethodField()
+    interest_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        write_only=True,
+        required=False,
+        allow_empty=True,
+        max_length=8,
+    )
     avatar_file = serializers.FileField(write_only=True, required=False, allow_null=True)
 
     class Meta:
@@ -72,6 +80,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             "academic_level_type",
             "academic_level_value",
             "interests",
+            "interest_ids",
             "onboarding_completed",
             "onboarding_completed_at",
             "created_at",
@@ -110,6 +119,10 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(CatalogInterestSerializer(many=True))
     def get_interests(self, instance):
+        if "student_interests" in getattr(instance, "_prefetched_objects_cache", {}):
+            student_interests = instance.student_interests.all()
+        else:
+            student_interests = instance.student_interests.select_related("interest").all()
         return [
             {
                 "id": student_interest.interest_id,
@@ -117,7 +130,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
                 "slug": student_interest.interest.slug,
                 "description": student_interest.interest.description,
             }
-            for student_interest in instance.student_interests.select_related("interest").all()
+            for student_interest in student_interests
         ]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
@@ -141,6 +154,38 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         onboarding_completed = attrs.get(
             "onboarding_completed", profile.onboarding_completed if profile else False
         )
+
+        if "interest_ids" in attrs:
+            interest_ids = attrs.pop("interest_ids")
+            if len(interest_ids) != len(set(interest_ids)):
+                raise serializers.ValidationError(
+                    {"interest_ids": "Each interest may only be selected once."}
+                )
+
+            selected_interests = list(
+                Interest.objects.filter(pk__in=interest_ids, is_active=True)
+            )
+            selected_by_id = {interest.pk: interest for interest in selected_interests}
+            if len(selected_by_id) != len(interest_ids):
+                raise serializers.ValidationError(
+                    {"interest_ids": "Select valid interests from the education catalog."}
+                )
+
+            if course:
+                valid_interest_ids = set(
+                    Interest.objects.filter(
+                        pk__in=interest_ids,
+                        is_active=True,
+                        courses=course,
+                    ).values_list("pk", flat=True)
+                )
+                if valid_interest_ids != set(interest_ids):
+                    raise serializers.ValidationError(
+                        {"interest_ids": "All selected interests must be valid for the selected course."}
+                    )
+            attrs["selected_interests"] = [
+                selected_by_id[interest_id] for interest_id in interest_ids
+            ]
 
         avatar_file = attrs.get("avatar_file") if "avatar_file" in attrs else None
         avatar_url = attrs.get("avatar_url") if "avatar_url" in attrs else None
@@ -244,6 +289,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         submitted_avatar = validated_data.pop("avatar_file", None)
+        selected_interests = validated_data.pop("selected_interests", None)
         old_reference = instance.avatar_reference or None
         upload_result = None
 
@@ -275,6 +321,20 @@ class StudentProfileSerializer(serializers.ModelSerializer):
                     setattr(instance, field_name, value)
                 instance.full_clean()
                 instance.save()
+                if selected_interests is not None:
+                    StudentInterest.objects.filter(student_profile=instance).delete()
+                    StudentInterest.objects.bulk_create(
+                        [
+                            StudentInterest(
+                                student_profile=instance,
+                                interest=interest,
+                            )
+                            for interest in selected_interests
+                        ]
+                    )
+                    getattr(instance, "_prefetched_objects_cache", {}).pop(
+                        "student_interests", None
+                    )
                 if old_reference and old_reference != instance.avatar_reference:
                     transaction.on_commit(
                         lambda: discard_cloudinary_avatar_reference(
@@ -589,18 +649,21 @@ class RegistrationSerializer(serializers.Serializer):
         password = validated_data.pop("password")
         first_name, last_name = self._split_name(name)
 
-        user = User.objects.create_user(
+        user = User(
             username=self._unique_username(email),
             email=email,
             first_name=first_name,
             last_name=last_name,
-            password=password,
+            is_active=False,
         )
+        user.set_password(password)
+        user.save()
         StudentProfile.objects.create(
             user=user,
             display_name=name,
             **validated_data,
         )
+        create_signup_verification(user=user)
         return user
 
     def to_representation(self, instance):
@@ -637,3 +700,18 @@ class LoginSerializer(serializers.Serializer):
             raise AuthenticationFailed("Invalid email or password.")
         attrs["user"] = authenticated_user
         return attrs
+
+
+class SignupVerificationRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(write_only=True)
+
+    def validate_email(self, value):
+        return value.strip().casefold()
+
+
+class SignupVerificationVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField(write_only=True)
+    code = serializers.CharField(write_only=True, trim_whitespace=False, max_length=32)
+
+    def validate_email(self, value):
+        return value.strip().casefold()

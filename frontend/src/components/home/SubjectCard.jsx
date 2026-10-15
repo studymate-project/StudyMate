@@ -33,8 +33,11 @@ function SubjectCard({ subject, compact = false }) {
       <div className="flex items-start gap-2">
         <Icon size={compact ? 17 : 18} className="mt-0.5 shrink-0 text-[var(--color-teal)]" />
         <div className="min-w-0">
-          <h3 className={`${compact ? 'text-base' : 'text-lg'} font-black leading-tight`}>{subject.name}</h3>
-          <p className="mt-3 text-sm font-black text-[var(--color-text-dim)]">{subject.count}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className={`${compact ? 'text-base' : 'text-lg'} font-black leading-tight`}>{subject.name}</h3>
+            {subject.isTrending ? <span className="rounded-full bg-[var(--color-primary)] px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[var(--color-primary-dark)]">Trending</span> : null}
+          </div>
+          <p className="mt-3 text-sm font-black text-[var(--color-text-dim)]">{subject.meta || subject.count}</p>
         </div>
       </div>
     </Link>

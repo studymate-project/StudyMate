@@ -1,9 +1,11 @@
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view, inline_serializer
-from rest_framework import serializers
+from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.generics import CreateAPIView
 from rest_framework.permissions import AllowAny
@@ -21,12 +23,25 @@ from apps.users.serializers import (
     LoginSerializer,
     PublicUserSerializer,
     RegistrationSerializer,
+    SignupVerificationRequestSerializer,
+    SignupVerificationVerifySerializer,
     StudentProfileSerializer,
+)
+from apps.users.services.verification import (
+    EMAIL_DELIVERY_UNAVAILABLE_MESSAGE,
+    GENERIC_REQUEST_MESSAGE,
+    INVALID_CODE_MESSAGE,
+    SignupEmailDeliveryError,
+    resend_signup_verification,
+    verify_signup_otp,
 )
 
 from .authentication import CookieJWTAuthentication
 from .schema import BAD_REQUEST, CSRF_HEADER, FORBIDDEN, NOT_FOUND, UNAUTHENTICATED
 from .search import SearchRequestSerializer, SearchResponseSerializer, normalize_search_query, search_content
+
+
+User = get_user_model()
 
 
 AUTH_USER_DATA = inline_serializer(
@@ -57,6 +72,10 @@ REGISTRATION_RESPONSE = inline_serializer(
         "user": AUTH_USER_DATA,
         "profile": StudentProfileSerializer(read_only=True),
     },
+)
+SIGNUP_VERIFICATION_RESPONSE = inline_serializer(
+    "SignupVerificationResponse",
+    fields={"detail": serializers.CharField(read_only=True)},
 )
 REFRESH_RESPONSE = inline_serializer(
     "RefreshResponse",
@@ -91,13 +110,17 @@ def enforce_cookie_csrf(request):
 @extend_schema_view(
     post=extend_schema(
         summary="Create an account",
-        description="Create a user and initial profile with identity and optional location data. Education selections are completed during onboarding.",
+        description=(
+            "Create an inactive user and send a short-lived email verification code. "
+            "The account becomes usable only after the code is verified. Education "
+            "selections are completed during onboarding."
+        ),
         request=RegistrationSerializer,
-        responses={201: REGISTRATION_RESPONSE, 400: BAD_REQUEST},
+        responses={202: SIGNUP_VERIFICATION_RESPONSE, 400: BAD_REQUEST, 503: SIGNUP_VERIFICATION_RESPONSE},
     )
 )
 class SignupView(CreateAPIView):
-    """Public account creation endpoint; token issuance is handled later."""
+    """Create a pending account without authenticating it."""
 
     serializer_class = RegistrationSerializer
     permission_classes = (AllowAny,)
@@ -105,7 +128,99 @@ class SignupView(CreateAPIView):
 
     def post(self, request, *args, **kwargs):
         enforce_cookie_csrf(request)
-        return super().post(request, *args, **kwargs)
+        # A valid duplicate signup receives the same generic response as a new
+        # signup. This check is intentionally before password validation so the
+        # endpoint does not turn account existence into a distinct error.
+        raw_email = request.data.get("email")
+        if isinstance(raw_email, str):
+            try:
+                normalized_email = serializers.EmailField().run_validation(raw_email).strip().casefold()
+            except serializers.ValidationError:
+                normalized_email = None
+            if normalized_email and User.objects.filter(email__iexact=normalized_email).exists():
+                return Response(
+                    {"detail": GENERIC_REQUEST_MESSAGE},
+                    status=status.HTTP_202_ACCEPTED,
+                )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            serializer.save()
+        except SignupEmailDeliveryError:
+            return Response(
+                {"detail": EMAIL_DELIVERY_UNAVAILABLE_MESSAGE},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except IntegrityError:
+            # A concurrent signup can pass the pre-check before the unique
+            # pending-verification row is committed. Keep that race generic and
+            # let the transaction roll back the losing account.
+            return Response(
+                {"detail": GENERIC_REQUEST_MESSAGE},
+                status=status.HTTP_202_ACCEPTED,
+            )
+        return Response(
+            {"detail": GENERIC_REQUEST_MESSAGE},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class SignupVerificationRequestView(APIView):
+    """Request a fresh signup verification code without account enumeration."""
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    throttle_scope = "auth_signup_verification_request"
+
+    @extend_schema(
+        summary="Request a signup verification email",
+        request=SignupVerificationRequestSerializer,
+        responses={202: SIGNUP_VERIFICATION_RESPONSE, 400: BAD_REQUEST, 503: SIGNUP_VERIFICATION_RESPONSE},
+    )
+    def post(self, request: Request) -> Response:
+        enforce_cookie_csrf(request)
+        serializer = SignupVerificationRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            resend_signup_verification(email=serializer.validated_data["email"])
+        except SignupEmailDeliveryError:
+            return Response(
+                {"detail": EMAIL_DELIVERY_UNAVAILABLE_MESSAGE},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(
+            {"detail": GENERIC_REQUEST_MESSAGE},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class SignupVerificationVerifyView(APIView):
+    """Verify a signup OTP and activate the associated account."""
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    throttle_scope = "auth_signup_verification_verify"
+
+    @extend_schema(
+        summary="Verify a signup email",
+        request=SignupVerificationVerifySerializer,
+        responses={200: SIGNUP_VERIFICATION_RESPONSE, 400: BAD_REQUEST},
+    )
+    def post(self, request: Request) -> Response:
+        enforce_cookie_csrf(request)
+        serializer = SignupVerificationVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        verified, message = verify_signup_otp(
+            email=serializer.validated_data["email"],
+            submitted_code=serializer.validated_data["code"],
+        )
+        if not verified:
+            return Response(
+                {"detail": INVALID_CODE_MESSAGE},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"detail": message}, status=status.HTTP_200_OK)
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")

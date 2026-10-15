@@ -1,8 +1,10 @@
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 
-from apps.education.models import AcademicLevel, Course, EducationBackground
+from apps.education.models import AcademicLevel, Course, EducationBackground, Interest, StudentInterest
 from apps.users.models import StudentProfile
 
 
@@ -186,6 +188,88 @@ class EducationProfileAPITests(TestCase):
         self.assertEqual(profile.custom_course, "UX Research")
         self.assertEqual(profile.academic_level_type, "other")
         self.assertTrue(profile.onboarding_completed)
+
+    def test_profile_update_persists_course_compatible_interests(self):
+        interest = Interest.objects.create(
+            name="Distributed Systems",
+            slug="test-distributed-systems",
+        )
+        interest.courses.add(self.btech)
+        self.client.force_authenticate(user=self.user)
+        self.client.post("/api/users/onboarding/", self.onboarding(), format="json")
+
+        response = self.client.patch(
+            f"/api/users/{self.user.username}/",
+            {"interest_ids": [interest.pk]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(
+            list(
+                StudentInterest.objects.filter(student_profile__user=self.user).values_list(
+                    "interest_id", flat=True
+                )
+            ),
+            [interest.pk],
+        )
+        self.assertEqual(response.data["interests"][0]["id"], interest.pk)
+
+        reopened = self.client.get(f"/api/users/{self.user.username}/")
+
+        self.assertEqual(reopened.status_code, 200, reopened.data)
+        self.assertEqual([item["id"] for item in reopened.data["interests"]], [interest.pk])
+
+    def test_profile_update_rejects_interest_from_another_course(self):
+        interest = Interest.objects.create(
+            name="Accounting",
+            slug="test-accounting",
+        )
+        interest.courses.add(self.bcom)
+        self.client.force_authenticate(user=self.user)
+        self.client.post("/api/users/onboarding/", self.onboarding(), format="json")
+
+        response = self.client.patch(
+            f"/api/users/{self.user.username}/",
+            {"interest_ids": [interest.pk]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("interest_ids", response.data)
+        self.assertFalse(StudentInterest.objects.filter(student_profile__user=self.user).exists())
+
+    def test_profile_list_reuses_prefetched_interests(self):
+        interest = Interest.objects.create(
+            name="Networks",
+            slug="test-networks",
+        )
+        interest.courses.add(self.btech)
+        first_profile = StudentProfile.objects.create(user=self.user, course=self.btech)
+        StudentInterest.objects.create(student_profile=first_profile, interest=interest)
+
+        with CaptureQueriesContext(connection) as one_profile_queries:
+            first_response = self.client.get("/api/users/")
+
+        self.assertEqual(first_response.status_code, 200)
+        for index in range(2):
+            extra_user = User.objects.create_user(
+                username=f"education-extra-{index}",
+                email=f"education-extra-{index}@example.com",
+                password="not-used-in-test",
+            )
+            extra_profile = StudentProfile.objects.create(user=extra_user, course=self.btech)
+            StudentInterest.objects.create(student_profile=extra_profile, interest=interest)
+
+        with CaptureQueriesContext(connection) as several_profile_queries:
+            response = self.client.get("/api/users/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(
+            len(several_profile_queries),
+            len(one_profile_queries) + 1,
+            "Profile interests should be served by the prefetch query, not one query per profile.",
+        )
 
     def test_invalid_relationship_and_unauthorized_profile_update_are_rejected(self):
         self.client.force_authenticate(user=self.user)

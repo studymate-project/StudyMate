@@ -1,9 +1,11 @@
 from datetime import timedelta
+import re
 from typing import ClassVar
 from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
@@ -25,7 +27,7 @@ from apps.notifications.serializers import NotificationSerializer
 from apps.resources.models import PublicationStatus, Resource, ResourceDownload, ResourceView, Tag, Video
 from apps.resources.serializers import ResourceSerializer, VideoSerializer
 from apps.resources.youtube import normalize_youtube_video_id
-from apps.users.models import StudentProfile
+from apps.users.models import SignupEmailVerification, StudentProfile
 from apps.users.serializers import RegistrationSerializer, StudentProfileSerializer
 
 
@@ -2204,18 +2206,16 @@ class APIViewTests(TestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.data["user"]["email"], "signup.student@example.com")
-        self.assertEqual(response.data["profile"]["display_name"], "Signup Student")
-        self.assertEqual(response.data["profile"]["country"], "India")
-        self.assertEqual(response.data["profile"]["state"], "Delhi")
-        self.assertEqual(response.data["profile"]["city"], "New Delhi")
+        self.assertEqual(response.status_code, 202)
+        self.assertIn("detail", response.data)
         self.assertNotIn("password", response.data)
         self.assertNotIn("access", response.data)
         self.assertNotIn("refresh", response.data)
 
         user = User.objects.get(email="signup.student@example.com")
         self.assertTrue(user.check_password("A-strong-signup-password-42!"))
+        self.assertFalse(user.is_active)
+        self.assertTrue(SignupEmailVerification.objects.filter(user=user).exists())
         self.assertFalse(user.is_staff)
         self.assertIsNone(user.student_profile.course)
         self.assertEqual(
@@ -2254,10 +2254,10 @@ class APIViewTests(TestCase):
             format="json",
         )
 
-        self.assertEqual(duplicate.status_code, 400)
-        self.assertIn("email", duplicate.data)
-        self.assertEqual(collision.status_code, 201)
-        self.assertEqual(collision.data["user"]["username"], "signupstudent-2")
+        self.assertEqual(duplicate.status_code, 202)
+        self.assertEqual(collision.status_code, 202)
+        self.assertEqual(User.objects.filter(email="signup.student@example.com").count(), 1)
+        self.assertEqual(User.objects.get(email="signup.student@example.com").username, "signupstudent-2")
 
     def test_signup_rejects_invalid_password_and_malformed_input(self):
         invalid_password = self.client.post(
