@@ -1,7 +1,10 @@
+import logging
 import math
+import random
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import (
     Avg,
     Case,
@@ -41,14 +44,22 @@ from rest_framework.viewsets import GenericViewSet, ModelViewSet
 from rest_framework.decorators import action
 
 from apps.core.permissions import IsResourceOwnerOrReadOnly, IsVideoOwnerOrReadOnly
+from apps.core.cache_metrics import record_cache_event
 from apps.core.schema import BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHENTICATED
+from apps.core.search import normalize_search_query
 from apps.education.models import Interest
 from apps.interactions.models import ResourceRating, ResourceUpvote, SavedResource
 from apps.interactions.serializers import ResourceRatingSerializer, SavedResourceSerializer
+from apps.notifications.models import Notification
+from apps.notifications.services import create_notification
 
 from .models import PublicationStatus, Resource, ResourceDownload, ResourceView, Video
 from .serializers import ResourceSerializer, VideoSerializer
 from .services.cloudinary import discard_cloudinary_reference, is_cloudinary_reference
+from .subject_cache import (
+    get_subject_cache_version,
+    get_subject_user_cache_version,
+)
 
 
 POPULARITY_VIEW_WEIGHT = 0.4
@@ -57,6 +68,32 @@ POPULARITY_UPVOTE_WEIGHT = 0.3
 SUBJECT_RECOMMENDATION_LIMIT = 12
 SUBJECT_TRENDING_LIMIT = 3
 SUBJECT_RECENT_WINDOW = timedelta(days=30)
+SUBJECT_CACHE_NAMESPACE = "studymate:subjects"
+SUBJECT_CACHE_VERSION = "v1"
+SUBJECT_CACHE_LOCK_TIMEOUT_SECONDS = 10
+SUBJECT_CACHE_LOCK_WAIT_SECONDS = 2
+SUBJECT_CACHE_LOCK_SLEEP_SECONDS = 0.05
+
+logger = logging.getLogger(__name__)
+
+
+def _notify_resource_owner(*, resource: Resource, actor, notification_type: str) -> None:
+    if resource.uploader_id == actor.pk:
+        return
+    try:
+        create_notification(
+            recipient=resource.uploader,
+            actor=actor,
+            notification_type=notification_type,
+            related_object=resource,
+        )
+    except Exception:
+        logger.exception(
+            "Unable to create resource notification resource_id=%s actor_id=%s notification_type=%s",
+            resource.pk,
+            actor.pk,
+            notification_type,
+        )
 
 
 def _rating_annotations(target_field: str) -> dict[str, object]:
@@ -99,6 +136,26 @@ def _resource_metric_annotations() -> dict[str, object]:
         "_download_count": Count("download_events", distinct=True),
         "_save_count": Count("saved_by", distinct=True),
         "_upvote_count": Count("upvotes", distinct=True),
+        **_rating_annotations("resource"),
+    }
+
+
+def _resource_metric_subquery_annotations() -> dict[str, object]:
+    def count_for(model):
+        count_queryset = model.objects.filter(resource_id=OuterRef("pk")).order_by().values("resource_id")
+        return Coalesce(
+            Subquery(
+                count_queryset.annotate(value=Count("pk")).values("value")[:1],
+                output_field=IntegerField(),
+            ),
+            Value(0),
+        )
+
+    return {
+        "_view_count": count_for(ResourceView),
+        "_download_count": count_for(ResourceDownload),
+        "_save_count": count_for(SavedResource),
+        "_upvote_count": count_for(ResourceUpvote),
         **_rating_annotations("resource"),
     }
 
@@ -196,6 +253,127 @@ def _video_subject_stats(recent_cutoff):
     )
 
 
+def _subject_cache_ttl() -> int:
+    base = settings.SUBJECT_RECOMMENDATION_CACHE_TTL_SECONDS
+    jitter = settings.SUBJECT_RECOMMENDATION_CACHE_TTL_JITTER_SECONDS
+    return base + random.randint(-jitter, jitter)
+
+
+def _subject_cache_get(key):
+    try:
+        value = cache.get(key)
+    except Exception:
+        record_cache_event("read_error")
+        logger.warning("Subject recommendation cache read failed", exc_info=True)
+        return None
+    record_cache_event("hit" if value is not None else "miss")
+    return value
+
+
+def _subject_cache_set(key, value) -> None:
+    try:
+        cache.set(key, value, timeout=_subject_cache_ttl())
+    except Exception:
+        record_cache_event("write_error")
+        logger.warning("Subject recommendation cache write failed", exc_info=True)
+
+
+def _subject_cache_lock(key):
+    try:
+        lock_factory = cache.lock
+    except AttributeError:
+        # Local/non-Redis cache backends do not provide distributed locks.
+        return None
+    except Exception:
+        logger.warning("Subject recommendation cache lock access failed", exc_info=True)
+        return None
+
+    try:
+        return lock_factory(
+            f"{key}:lock",
+            timeout=SUBJECT_CACHE_LOCK_TIMEOUT_SECONDS,
+            blocking=True,
+            blocking_timeout=SUBJECT_CACHE_LOCK_WAIT_SECONDS,
+            sleep=SUBJECT_CACHE_LOCK_SLEEP_SECONDS,
+        )
+    except Exception:
+        logger.warning("Subject recommendation cache lock creation failed", exc_info=True)
+        return None
+
+
+def _subject_global_cache_key() -> str:
+    return (
+        f"{SUBJECT_CACHE_NAMESPACE}:global:{SUBJECT_CACHE_VERSION}:"
+        f"version-{get_subject_cache_version()}:window-{SUBJECT_RECENT_WINDOW.days}d"
+    )
+
+
+def _subject_profile_cache_version(profile) -> str:
+    if profile is None:
+        return "none"
+    return profile.updated_at.strftime("%Y%m%d%H%M%S%f")
+
+
+def _subject_user_cache_key(user, profile, limit: int) -> str:
+    profile_version = _subject_profile_cache_version(profile)
+    return (
+        f"{SUBJECT_CACHE_NAMESPACE}:user:{SUBJECT_CACHE_VERSION}:"
+        f"global-{get_subject_cache_version()}:"
+        f"user-version-{get_subject_user_cache_version(user.pk)}:"
+        f"window-{SUBJECT_RECENT_WINDOW.days}d:"
+        f"{user.pk}:profile-{profile_version}:limit-{limit}"
+    )
+
+
+def _build_subject_stats(cache_key):
+    recent_cutoff = timezone.now() - SUBJECT_RECENT_WINDOW
+    subject_stats = {}
+    _merge_subject_stats(subject_stats, _resource_subject_stats(recent_cutoff), "resource")
+    _merge_subject_stats(subject_stats, _video_subject_stats(recent_cutoff), "video")
+    _subject_cache_set(cache_key, subject_stats)
+    return subject_stats
+
+
+def _cached_subject_stats():
+    cache_key = _subject_global_cache_key()
+    cached = _subject_cache_get(cache_key)
+    if isinstance(cached, dict):
+        return cached
+
+    lock = _subject_cache_lock(cache_key)
+    if lock is None:
+        return _build_subject_stats(cache_key)
+
+    acquired = False
+    try:
+        try:
+            acquired = bool(lock.acquire())
+        except Exception:
+            logger.warning("Subject recommendation cache lock acquire failed", exc_info=True)
+            return _build_subject_stats(cache_key)
+
+        if acquired:
+            # Another request may have populated the cache while this request
+            # was waiting for the lock.
+            cached = _subject_cache_get(cache_key)
+            if isinstance(cached, dict):
+                return cached
+            return _build_subject_stats(cache_key)
+
+        # Contention is bounded by blocking_timeout. Recheck once before the
+        # database fallback in case the owner released just after timeout.
+        cached = _subject_cache_get(cache_key)
+        if isinstance(cached, dict):
+            return cached
+        return _build_subject_stats(cache_key)
+    finally:
+        if acquired:
+            try:
+                lock.release()
+            except Exception:
+                logger.warning("Subject recommendation cache lock release failed", exc_info=True)
+
+
 def _academic_subject_keys(profile):
     exact_level = set()
     course_level = set()
@@ -252,13 +430,8 @@ def _subject_recommendation_score(stats, relevance):
     return popularity + recent + relevance
 
 
-def _subject_recommendations(user, limit):
-    recent_cutoff = timezone.now() - SUBJECT_RECENT_WINDOW
-    subject_stats = {}
-    _merge_subject_stats(subject_stats, _resource_subject_stats(recent_cutoff), "resource")
-    _merge_subject_stats(subject_stats, _video_subject_stats(recent_cutoff), "video")
-
-    profile = getattr(user, "student_profile", None)
+def _calculate_subject_recommendations(user, profile, subject_stats, limit):
+    subject_stats = {key: dict(stats) for key, stats in subject_stats.items()}
     profile_complete = bool(profile and profile.onboarding_completed)
     exact_level_keys = course_level_keys = interest_keys = course_interest_keys = set()
     selected_subjects = {}
@@ -324,8 +497,30 @@ def _subject_recommendations(user, limit):
     }
 
 
+def _subject_recommendations(user, limit):
+    profile = getattr(user, "student_profile", None)
+    user_cache_key = _subject_user_cache_key(user, profile, limit)
+    cached = _subject_cache_get(user_cache_key)
+    if isinstance(cached, dict):
+        return cached
+
+    result = _calculate_subject_recommendations(
+        user,
+        profile,
+        _cached_subject_stats(),
+        limit,
+    )
+    _subject_cache_set(user_cache_key, result)
+    return result
+
+
 RESOURCE_LIST_PARAMETERS = [
-    OpenApiParameter("search", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Search title, subject, topic, description, or tags."),
+    OpenApiParameter(
+        "search",
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        description="Search title, subject, topic, course, semester, description, or tags; maximum 200 characters.",
+    ),
     OpenApiParameter("subject", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Case-insensitive subject filter."),
     OpenApiParameter("topic", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Case-insensitive topic filter."),
     OpenApiParameter(
@@ -367,6 +562,15 @@ RESOURCE_LIST_PARAMETERS = [
         OpenApiTypes.INT,
         OpenApiParameter.QUERY,
         description="Filter resources owned by one user ID.",
+    ),
+]
+
+VIDEO_LIST_PARAMETERS = [
+    OpenApiParameter(
+        "search",
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        description="Search title, subject, topic, course, semester, description, or tags; maximum 200 characters.",
     ),
 ]
 
@@ -460,7 +664,7 @@ class ResourceViewSet(ModelViewSet):
 
     def get_queryset(self):
         queryset = Resource.objects.select_related("uploader", "academic_level").prefetch_related("tags").annotate(
-            **_resource_metric_annotations(),
+            **_resource_metric_subquery_annotations(),
             **_user_rating_annotation("resource", self.request.user),
         ).order_by("-created_at", "-pk")
         if self.request.user.is_authenticated:
@@ -623,7 +827,7 @@ class ResourceViewSet(ModelViewSet):
             return queryset.none()
 
         ordering = self._requested_ordering()
-        search_term = self.request.query_params.get("search", "").strip()
+        search_term = normalize_search_query(self.request.query_params.get("search", ""), field_name="search")
         if not search_term:
             queryset = queryset.distinct() if tag_filter_applied else queryset
             return self._apply_ordering(queryset, ordering)
@@ -742,6 +946,7 @@ class SavedResourceListView(ListAPIView):
 @extend_schema_view(
     list=extend_schema(
         summary="List videos",
+        parameters=VIDEO_LIST_PARAMETERS,
         responses=VideoSerializer(many=True),
     ),
     retrieve=extend_schema(
@@ -768,10 +973,30 @@ class VideoViewSet(ListModelMixin, RetrieveModelMixin, CreateModelMixin, Generic
         queryset = Video.objects.select_related("uploader", "academic_level").prefetch_related("tags").annotate(
             **_rating_annotations("video"),
             **_user_rating_annotation("video", self.request.user),
-        )
+        ).order_by("-created_at", "-pk")
         if self.request.user.is_authenticated:
             return queryset.filter(Q(status=PublicationStatus.PUBLISHED) | Q(uploader=self.request.user))
         return queryset.filter(status=PublicationStatus.PUBLISHED)
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        if self.action != "list":
+            return queryset
+
+        search_term = normalize_search_query(self.request.query_params.get("search", ""), field_name="search")
+        if not search_term:
+            return queryset
+
+        return queryset.filter(
+            Q(title__icontains=search_term)
+            | Q(subject__icontains=search_term)
+            | Q(topic__icontains=search_term)
+            | Q(course__icontains=search_term)
+            | Q(semester__icontains=search_term)
+            | Q(description__icontains=search_term)
+            | Q(tags__name__icontains=search_term)
+            | Q(tags__slug__icontains=search_term)
+        ).distinct()
 
     def get_permissions(self):
         if self.action in {"list", "retrieve"}:
@@ -865,6 +1090,12 @@ class ResourceSaveView(ResourceInteractionView):
             user=request.user,
             resource=resource,
         )
+        if created:
+            _notify_resource_owner(
+                resource=resource,
+                actor=request.user,
+                notification_type=Notification.NotificationType.RESOURCE_SAVED,
+            )
         return Response(
             SavedResourceSerializer(saved).data,
             status=HTTP_201_CREATED if created else HTTP_200_OK,
@@ -900,6 +1131,12 @@ class ResourceUpvoteView(ResourceInteractionView):
             user=request.user,
             resource=resource,
         )
+        if created:
+            _notify_resource_owner(
+                resource=resource,
+                actor=request.user,
+                notification_type=Notification.NotificationType.RESOURCE_UPVOTED,
+            )
         return Response(
             {
                 "upvoted": True,

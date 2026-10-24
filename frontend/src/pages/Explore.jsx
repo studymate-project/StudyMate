@@ -84,10 +84,10 @@ function Explore() {
 
     return params
   }, [activeContent, activeSort, searchParamsKey])
-  const resourceRequest = useResourceList(requestParams)
+  const showVideos = activeContent === 'video'
+  const resourceRequest = useResourceList(showVideos ? null : requestParams)
   const [videoState, setVideoState] = useState({ videos: [], loading: false, error: null, requestKey: null })
 
-  const showVideos = activeContent === 'video'
   const videoRequestParams = useMemo(
     () => Object.fromEntries(Object.entries(requestParams).filter(([key]) => key !== 'resource_type')),
     [requestParams],
@@ -151,7 +151,7 @@ function Explore() {
                 aria-selected={isActive}
                 onClick={() => setActiveSort(tab)}
                 className={[
-                  'min-h-12 border-2 px-5 text-base font-black transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]',
+                  'min-h-12 border-2 px-5 text-base font-black transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)] rounded-xl',
                   isActive
                     ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-dark)]'
                     : 'border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-text)] hover:bg-[var(--color-blue-hover)]',

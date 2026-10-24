@@ -267,6 +267,32 @@ class SignupEmailVerificationTests(TestCase):
         self.assertEqual(mail.outbox[0].to, ["task-recipient@example.com"])
         self.assertIn("123456", mail.outbox[0].body)
 
+    def test_duplicate_email_task_delivery_sends_once_for_current_verification(self):
+        _, enqueue = self.signup()
+        verification = SignupEmailVerification.objects.get(email=self.payload["email"])
+        otp = self.email_code_from_enqueue(enqueue)
+
+        send_signup_verification_email_task.run(
+            self.payload["email"],
+            otp,
+            verification_id=verification.pk,
+        )
+        send_signup_verification_email_task.run(
+            self.payload["email"],
+            otp,
+            verification_id=verification.pk,
+        )
+
+        verification.refresh_from_db()
+        self.assertIsNotNone(verification.email_sent_at)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_celery_dispatch_includes_verification_identifier(self):
+        _, enqueue = self.signup()
+
+        self.assertIsInstance(enqueue.call_args.kwargs["verification_id"], int)
+        self.assertGreater(enqueue.call_args.kwargs["verification_id"], 0)
+
     def test_celery_worker_discovers_signup_email_task(self):
         self.assertIn(
             "apps.users.tasks.send_signup_verification_email_task",

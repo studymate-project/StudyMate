@@ -1,5 +1,6 @@
 """Secure signup email OTP lifecycle."""
 
+import logging
 import secrets
 from datetime import timedelta
 
@@ -10,6 +11,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from ..models import SignupEmailVerification
+
+
+logger = logging.getLogger(__name__)
 
 
 INVALID_CODE_MESSAGE = "Invalid or expired verification code."
@@ -61,8 +65,17 @@ def _enqueue_email(*, verification_id: int, email: str, otp: str) -> bool:
     from ..tasks import send_signup_verification_email_task
 
     try:
-        send_signup_verification_email_task.delay(email, otp)
+        send_signup_verification_email_task.delay(
+            email,
+            otp,
+            verification_id=verification_id,
+        )
     except Exception as exc:
+        logger.error(
+            "Signup verification email enqueue failed verification_id=%s failure_type=%s",
+            verification_id,
+            type(exc).__name__,
+        )
         # Do not turn a broker failure into a successful-looking signup. The
         # OTP remains hashed and last_sent_at remains empty, so resend remains
         # a safe recovery path after the transient failure is resolved.
@@ -143,6 +156,7 @@ def resend_signup_verification(*, email: str) -> bool:
                 "expires_at",
                 "attempts",
                 "last_sent_at",
+                "email_sent_at",
                 "updated_at",
             )
         )

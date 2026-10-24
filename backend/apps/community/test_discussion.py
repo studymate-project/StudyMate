@@ -1,4 +1,6 @@
 from django.contrib.auth.models import User
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
 from apps.community.models import DiscussionComment, DiscussionCommentLike
@@ -73,6 +75,33 @@ class DiscussionApiTests(APITestCase):
             self.assertEqual(response.data["count"], 0)
             self.assertEqual(response.data["results"], [])
 
+    def test_discussion_page_bounds_top_level_comments_while_prefetching_replies(self):
+        comments = [
+            DiscussionComment.objects.create(
+                resource=self.resource,
+                author=self.member,
+                body=f"Bounded comment {index}",
+            )
+            for index in range(101)
+        ]
+        reply = DiscussionComment.objects.create(
+            resource=self.resource,
+            parent=comments[0],
+            author=self.member,
+            body="Bounded reply",
+        )
+
+        first_page = self.client.get(self.resource_url(), {"page": 1, "page_size": 100})
+        second_page = self.client.get(self.resource_url(), {"page": 2, "page_size": 100})
+
+        self.assertEqual(first_page.status_code, 200, first_page.data)
+        self.assertEqual(second_page.status_code, 200, second_page.data)
+        self.assertEqual(first_page.data["count"], 101)
+        self.assertEqual(len(first_page.data["results"]), 100)
+        self.assertEqual(len(second_page.data["results"]), 1)
+        self.assertEqual(first_page.data["results"][0]["id"], comments[0].pk)
+        self.assertEqual(first_page.data["results"][0]["replies"][0]["id"], reply.pk)
+
     def test_comment_likes_are_authenticated_idempotent_and_removable(self):
         self.client.force_authenticate(user=self.member)
         comment_response = self.client.post(self.video_url(), {"body": "Video question"}, format="json")
@@ -111,3 +140,116 @@ class DiscussionApiTests(APITestCase):
         video_list = self.client.get(self.video_url())
         self.assertEqual(video_list.status_code, 200)
         self.assertEqual(video_list.data["count"], 0)
+
+    def test_comment_list_query_count_does_not_grow_with_comments_or_replies(self):
+        self.client.force_authenticate(user=self.member)
+        first_comment = DiscussionComment.objects.create(
+            resource=self.resource,
+            author=self.member,
+            body="First comment",
+        )
+        first_reply = DiscussionComment.objects.create(
+            resource=self.resource,
+            parent=first_comment,
+            author=self.member,
+            body="First reply",
+        )
+        DiscussionCommentLike.objects.create(comment=first_comment, user=self.member)
+        DiscussionCommentLike.objects.create(comment=first_reply, user=self.member)
+
+        with CaptureQueriesContext(connection) as small_queries:
+            small_response = self.client.get(self.resource_url())
+
+        self.assertEqual(small_response.status_code, 200)
+        self.assertEqual(small_response.data["results"][0]["like_count"], 1)
+        self.assertTrue(small_response.data["results"][0]["liked"])
+        self.assertEqual(small_response.data["results"][0]["replies"][0]["like_count"], 1)
+        self.assertTrue(small_response.data["results"][0]["replies"][0]["liked"])
+
+        for index in range(2):
+            comment = DiscussionComment.objects.create(
+                resource=self.resource,
+                author=self.member,
+                body=f"Additional comment {index}",
+            )
+            reply = DiscussionComment.objects.create(
+                resource=self.resource,
+                parent=comment,
+                author=self.member,
+                body=f"Additional reply {index}",
+            )
+            DiscussionCommentLike.objects.create(comment=comment, user=self.member)
+            DiscussionCommentLike.objects.create(comment=reply, user=self.member)
+
+        with CaptureQueriesContext(connection) as large_queries:
+            large_response = self.client.get(self.resource_url())
+
+        self.assertEqual(large_response.status_code, 200)
+        self.assertEqual(len(large_response.data["results"]), 3)
+        self.assertEqual(len(large_response.data["results"][0]["replies"]), 1)
+        self.assertEqual(
+            len(large_queries),
+            len(small_queries),
+            "comment serialization should not add one likes query per comment or reply",
+        )
+
+    def test_comment_detail_query_count_does_not_grow_with_visible_replies(self):
+        self.client.force_authenticate(user=self.member)
+        comment = DiscussionComment.objects.create(
+            resource=self.resource,
+            author=self.member,
+            body="Detail comment",
+        )
+        reply = DiscussionComment.objects.create(
+            resource=self.resource,
+            parent=comment,
+            author=self.member,
+            body="First detail reply",
+        )
+        DiscussionCommentLike.objects.create(comment=comment, user=self.member)
+        DiscussionCommentLike.objects.create(comment=reply, user=self.member)
+
+        hidden_reply = DiscussionComment.objects.create(
+            resource=self.resource,
+            parent=comment,
+            author=self.owner,
+            body="Hidden detail reply",
+            status=PublicationStatus.DRAFT,
+        )
+
+        detail_url = f"/api/discussion/comments/{comment.pk}/"
+        with CaptureQueriesContext(connection) as small_queries:
+            small_response = self.client.get(detail_url)
+
+        self.assertEqual(small_response.status_code, 200)
+        self.assertEqual(small_response.data["like_count"], 1)
+        self.assertTrue(small_response.data["liked"])
+        self.assertEqual(small_response.data["replies"][0]["like_count"], 1)
+        self.assertTrue(small_response.data["replies"][0]["liked"])
+        self.assertNotIn(hidden_reply.pk, [item["id"] for item in small_response.data["replies"]])
+
+        extra_reply_ids = []
+        for index in range(2):
+            extra_reply = DiscussionComment.objects.create(
+                resource=self.resource,
+                parent=comment,
+                author=self.member,
+                body=f"Additional detail reply {index}",
+            )
+            extra_reply_ids.append(extra_reply.pk)
+            DiscussionCommentLike.objects.create(comment=extra_reply, user=self.member)
+
+        with CaptureQueriesContext(connection) as large_queries:
+            large_response = self.client.get(detail_url)
+
+        self.assertEqual(large_response.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in large_response.data["replies"]],
+            [reply.pk, *extra_reply_ids],
+        )
+        self.assertNotIn(hidden_reply.pk, [item["id"] for item in large_response.data["replies"]])
+        self.assertEqual(
+            len(large_queries),
+            len(small_queries),
+            "comment detail serialization should not add one likes query per reply",
+        )

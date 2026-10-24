@@ -55,6 +55,10 @@ class Notification(models.Model):
         ]
         indexes = [
             models.Index(fields=["recipient", "is_read", "created_at"]),
+            models.Index(
+                fields=["recipient", "-created_at", "-id"],
+                name="notif_recipient_created_idx",
+            ),
             models.Index(fields=["content_type", "object_id"]),
         ]
 

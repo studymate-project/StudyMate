@@ -30,6 +30,7 @@ from apps.resources.services.cloudinary import (
     discard_uploaded_avatar,
     upload_profile_avatar,
 )
+from apps.resources.subject_cache import schedule_subjects_cache_invalidation
 
 
 User = get_user_model()
@@ -332,6 +333,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
                             for interest in selected_interests
                         ]
                     )
+                    schedule_subjects_cache_invalidation(instance.user_id)
                     getattr(instance, "_prefetched_objects_cache", {}).pop(
                         "student_interests", None
                     )
@@ -565,6 +567,7 @@ class OnboardingSerializer(serializers.Serializer):
                     for interest in validated_data["interests"]
                 ]
             )
+            schedule_subjects_cache_invalidation(profile.user_id)
         return profile
 
     @transaction.atomic

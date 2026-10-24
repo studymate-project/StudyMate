@@ -111,12 +111,16 @@ SEARCH_SPECS = (
 )
 
 
-def normalize_search_query(value: str) -> str:
+def normalize_search_query(value: str, *, field_name: str = "q") -> str:
     """Normalize whitespace while rejecting database-unsafe null characters."""
 
     normalized = " ".join(value.split())
+    if len(normalized) > MAX_QUERY_LENGTH:
+        raise serializers.ValidationError(
+            {field_name: f"Search query must be {MAX_QUERY_LENGTH} characters or fewer."}
+        )
     if "\x00" in normalized:
-        raise serializers.ValidationError({"q": "Search query contains an invalid character."})
+        raise serializers.ValidationError({field_name: "Search query contains an invalid character."})
     return normalized
 
 

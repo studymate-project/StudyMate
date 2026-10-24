@@ -9,4 +9,4 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings")
 
 app = Celery("studymate")
 app.config_from_object("django.conf:settings", namespace="CELERY")
-app.autodiscover_tasks(["apps.users"], force=True)
+app.autodiscover_tasks(["apps.users", "apps.notifications"], force=True)

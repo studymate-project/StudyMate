@@ -18,7 +18,14 @@ function UserProfile() {
   useEffect(() => {
     let active = true
 
-    Promise.all([getPublicProfile(username), listResources(), listQuestions()]).then(
+    getPublicProfile(username).then(async (profileResult) => {
+      const profileUserId = profileResult.user.id
+      const [resourceResult, questionResult] = await Promise.all([
+        listResources(profileUserId ? { uploader: profileUserId, page_size: 20 } : {}),
+        listQuestions(profileUserId ? { author: profileUserId, page_size: 20 } : {}),
+      ])
+      return [profileResult, resourceResult, questionResult]
+    }).then(
       ([profileResult, resourceResult, questionResult]) => {
         if (!active) return
         const profileUsername = profileResult.user.username || username

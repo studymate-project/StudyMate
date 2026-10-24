@@ -17,7 +17,7 @@ export {
   trackResourceView,
   unsaveResource,
 } from './resources'
-export { createVideo, deleteVideoRating, getVideoBySlug, listVideos, normalizeVideo, saveVideoRating } from './videos'
+export { clearVideoListCache, createVideo, deleteVideoRating, getVideoBySlug, listVideos, normalizeVideo, saveVideoRating } from './videos'
 export { normalizeSearchQuery, searchContent, SEARCH_MAX_QUERY_LENGTH, SEARCH_PAGE_SIZE } from './search'
 export {
   createResourceDiscussionComment,
@@ -37,10 +37,14 @@ export {
 } from './profile'
 export {
   clearNotificationCache,
+  getNotificationCategory,
+  getNotificationTarget,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  matchesNotificationTab,
   normalizeNotification,
+  openNotificationTarget,
 } from './notifications'
 export {
   clearQuestionListCache,

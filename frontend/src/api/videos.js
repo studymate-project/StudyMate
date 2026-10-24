@@ -1,5 +1,5 @@
-import { apiClient } from './client'
-import { isValidYouTubeVideoId } from '../utils/youtubeUtils'
+import { apiClient } from './client.js'
+import { isValidYouTubeVideoId } from '../utils/youtubeUtils.js'
 
 const choiceLabels = {
   beginner: 'Beginner',
@@ -8,6 +8,30 @@ const choiceLabels = {
 }
 
 const inFlightRequests = new Map()
+const supportedQueryKeys = new Set([
+  'page',
+  'page_size',
+  'search',
+  'subject',
+  'topic',
+  'academic_level',
+  'difficulty',
+  'tags',
+  'ordering',
+  'uploader',
+])
+
+function normalizeParams(params) {
+  return Object.fromEntries(
+    Object.entries(params || {}).filter(([key, value]) => (
+      supportedQueryKeys.has(key)
+      && value !== undefined
+      && value !== null
+      && value !== ''
+      && !(Array.isArray(value) && value.length === 0)
+    )).sort(([firstKey], [secondKey]) => firstKey.localeCompare(secondKey)),
+  )
+}
 
 function formatDate(value) {
   if (!value) return null
@@ -65,15 +89,26 @@ export function normalizeVideo(video) {
 }
 
 export function createVideo(payload) {
-  return apiClient.post('/videos/', payload).then((response) => normalizeVideo(response.data))
+  return apiClient.post('/videos/', payload).then((response) => {
+    clearVideoListCache()
+    return normalizeVideo(response.data)
+  })
 }
 
 export function listVideos(params = {}) {
-  return apiClient.get('/videos/', { params }).then((response) => {
+  const query = normalizeParams(params)
+  const requestKey = `video-list:${JSON.stringify(query)}`
+  // The API includes the authenticated user's own non-published videos, so
+  // only coalesce concurrent requests; do not retain a completed list across
+  // account changes or logout/login transitions.
+  const existingRequest = inFlightRequests.get(requestKey)
+  if (existingRequest) return existingRequest
+
+  const request = apiClient.get('/videos/', { params: query }).then((response) => {
     const data = response.data
     const results = Array.isArray(data) ? data : data?.results || []
 
-    return {
+    const normalized = {
       videos: results.map(normalizeVideo),
       pagination: {
         count: Array.isArray(data) ? results.length : data?.count || 0,
@@ -81,6 +116,20 @@ export function listVideos(params = {}) {
         previous: Array.isArray(data) ? null : data?.previous || null,
       },
     }
+    return normalized
+  })
+
+  inFlightRequests.set(requestKey, request)
+  request.then(
+    () => { if (inFlightRequests.get(requestKey) === request) inFlightRequests.delete(requestKey) },
+    () => { if (inFlightRequests.get(requestKey) === request) inFlightRequests.delete(requestKey) },
+  )
+  return request
+}
+
+export function clearVideoListCache() {
+  inFlightRequests.forEach((request, key) => {
+    if (String(key).startsWith('video-list:')) inFlightRequests.delete(key)
   })
 }
 
@@ -106,9 +155,15 @@ export function getVideoBySlug(slug) {
 }
 
 export function saveVideoRating(videoSlug, rating) {
-  return apiClient.post(`/videos/${encodeURIComponent(videoSlug)}/rating/`, { rating }).then((response) => response.data)
+  return apiClient.post(`/videos/${encodeURIComponent(videoSlug)}/rating/`, { rating }).then((response) => {
+    clearVideoListCache()
+    return response.data
+  })
 }
 
 export function deleteVideoRating(videoSlug) {
-  return apiClient.delete(`/videos/${encodeURIComponent(videoSlug)}/rating/`).then((response) => response.data)
+  return apiClient.delete(`/videos/${encodeURIComponent(videoSlug)}/rating/`).then((response) => {
+    clearVideoListCache()
+    return response.data
+  })
 }

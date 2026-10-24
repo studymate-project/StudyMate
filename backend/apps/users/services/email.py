@@ -11,7 +11,7 @@ from django.core.mail import send_mail
 def send_signup_verification_email(*, email: str, otp: str) -> None:
     """Send one signup OTP through Django's configured email backend."""
 
-    send_mail(
+    delivered = send_mail(
         subject="Verify your StudyMate email",
         message=(
             "Your StudyMate verification code is "
@@ -21,3 +21,5 @@ def send_signup_verification_email(*, email: str, otp: str) -> None:
         recipient_list=[email],
         fail_silently=False,
     )
+    if delivered != 1:
+        raise RuntimeError("Email backend did not accept exactly one message.")

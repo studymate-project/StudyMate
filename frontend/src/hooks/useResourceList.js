@@ -10,10 +10,15 @@ const initialState = {
 }
 
 export function useResourceList(params = {}) {
-  const queryKey = JSON.stringify(params)
+  const enabled = params !== null
+  const queryKey = enabled ? JSON.stringify(params) : null
   const [state, setState] = useState(initialState)
 
   useEffect(() => {
+    if (!enabled) {
+      return undefined
+    }
+
     let isCurrent = true
 
     listResources(JSON.parse(queryKey)).then(
@@ -28,7 +33,7 @@ export function useResourceList(params = {}) {
     return () => {
       isCurrent = false
     }
-  }, [queryKey])
+  }, [enabled, queryKey])
 
   const isCurrentQuery = state.queryKey === queryKey
   return {

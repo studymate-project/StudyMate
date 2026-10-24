@@ -161,6 +161,8 @@ class UnifiedSearchAPITests(TestCase):
         null_character_response = self.client.get("/api/search/?q=%00")
         invalid_limit_response = self.client.get("/api/search/?q=term&limit=not-a-number")
         invalid_offset_response = self.client.get("/api/search/?q=term&offset=-1")
+        maximum_offset_response = self.client.get("/api/search/?q=term&offset=1000")
+        over_maximum_offset_response = self.client.get("/api/search/?q=term&offset=1001")
 
         self.assertEqual(normalized_response.status_code, 200, normalized_response.data)
         self.assertEqual(normalized_response.data["query"], "Whitespace normalization term")
@@ -177,6 +179,9 @@ class UnifiedSearchAPITests(TestCase):
         self.assertIn("limit", invalid_limit_response.data)
         self.assertEqual(invalid_offset_response.status_code, 400)
         self.assertIn("offset", invalid_offset_response.data)
+        self.assertEqual(maximum_offset_response.status_code, 200, maximum_offset_response.data)
+        self.assertEqual(over_maximum_offset_response.status_code, 400)
+        self.assertIn("offset", over_maximum_offset_response.data)
 
     def test_search_visibility_matches_existing_content_endpoints(self):
         public_resource = self.create_resource(title="visibilityterm public resource", user=self.other_user)
@@ -269,3 +274,16 @@ class UnifiedSearchAPITests(TestCase):
             {result["id"] for result in first_response.data["results"] + second_response.data["results"]}
             <= {resource.pk for resource in resources}
         )
+
+    def test_search_candidate_overfetch_keeps_late_global_pages_populated(self):
+        for index in range(30):
+            self.create_resource(title=f"overfetchterm resource {index}")
+            self.create_video(title=f"overfetchterm video {index}")
+            self.create_question(title=f"overfetchterm question {index}")
+
+        response = self.client.get("/api/search/?q=overfetchterm&limit=5&offset=20")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(len(response.data["results"]), 5)
+        self.assertTrue(response.data["has_more"])
+        self.assertEqual(response.data["next_offset"], 25)

@@ -1,4 +1,5 @@
-import { apiClient } from './client'
+import { apiClient, refreshAccessCookie, resetRefreshState } from './client'
+import { restoreSessionWithRefresh } from './authFlow'
 import { clearNotificationCache } from './notifications'
 import { clearQuestionListCache } from './questions'
 import { clearResourceListCache } from './resources'
@@ -10,11 +11,16 @@ function getUser(data) {
   return data?.user || null
 }
 
-export async function login(credentials) {
+export function clearClientAuthState() {
   clearResourceListCache()
   clearQuestionListCache()
   clearNotificationCache()
+}
+
+export async function login(credentials) {
+  clearClientAuthState()
   const response = await apiClient.post('/auth/login/', credentials)
+  resetRefreshState()
   return { ...response.data, user: getUser(response.data) }
 }
 
@@ -47,37 +53,29 @@ export async function getCurrentUser(config) {
 }
 
 export async function refreshSession() {
-  const response = await apiClient.post('/auth/refresh/')
+  const response = await refreshAccessCookie()
   return response.data
 }
 
 async function restoreSessionOnce() {
   const restoreConfig = { _skipAuthRefresh: true }
 
-  try {
-    return await getCurrentUser(restoreConfig)
-  } catch (error) {
-    if (error?.status !== 401) throw error
-
-    try {
-      await refreshSession()
-    } catch (refreshError) {
-      // A visitor without an access or refresh cookie is expected to fail
-      // refresh. Preserve other failures (including CSRF/configuration 403s)
-      // so they are not mistaken for an anonymous session.
-      if (refreshError?.status === 401) return null
-      throw refreshError
-    }
-
-    return getCurrentUser(restoreConfig)
-  }
+  return restoreSessionWithRefresh({
+    getCurrentUser: () => getCurrentUser(restoreConfig),
+    refreshSession,
+  })
 }
 
 export function restoreSession() {
   if (!sessionRestoreRequest) {
-    sessionRestoreRequest = restoreSessionOnce().finally(() => {
-      sessionRestoreRequest = undefined
-    })
+    sessionRestoreRequest = restoreSessionOnce()
+      .then((nextUser) => {
+        if (!nextUser) clearClientAuthState()
+        return nextUser
+      })
+      .finally(() => {
+        sessionRestoreRequest = undefined
+      })
   }
 
   return sessionRestoreRequest
@@ -85,8 +83,7 @@ export function restoreSession() {
 
 export async function logout() {
   const response = await apiClient.post('/auth/logout/')
-  clearResourceListCache()
-  clearQuestionListCache()
-  clearNotificationCache()
+  resetRefreshState()
+  clearClientAuthState()
   return response.data
 }

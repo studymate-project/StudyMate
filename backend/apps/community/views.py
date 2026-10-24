@@ -2,7 +2,7 @@ import logging
 
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers
 from rest_framework.generics import CreateAPIView, ListAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.mixins import CreateModelMixin, DestroyModelMixin, ListModelMixin, RetrieveModelMixin, UpdateModelMixin
@@ -12,6 +12,7 @@ from rest_framework.viewsets import GenericViewSet
 
 from apps.core.permissions import IsAnswerAuthorOrReadOnly, IsQuestionAuthorOrReadOnly
 from apps.core.schema import BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHENTICATED
+from apps.core.search import normalize_search_query
 
 from apps.resources.models import PublicationStatus
 
@@ -21,6 +22,42 @@ from apps.notifications.services import create_notification
 
 from .models import Answer, Question
 from .serializers import AnswerSerializer, ProfileAnswerSerializer, QuestionSerializer
+
+
+def _queue_answer_notification_repair(answer_id: int) -> None:
+    """Recover a failed notification write without changing answer creation."""
+
+    from apps.notifications.tasks import (
+        _create_question_answer_notification,
+        ensure_question_answer_notification_task,
+    )
+
+    try:
+        ensure_question_answer_notification_task.delay(answer_id)
+    except Exception as exc:
+        logger.error(
+            "Unable to enqueue answer notification repair for answer %s; attempting synchronous repair; failure_type=%s",
+            answer_id,
+            type(exc).__name__,
+        )
+        try:
+            _create_question_answer_notification(answer_id)
+        except Exception as exc:
+            logger.error(
+                "Synchronous answer notification repair failed for answer %s; notification remains unavailable; failure_type=%s",
+                answer_id,
+                type(exc).__name__,
+            )
+
+
+QUESTION_LIST_PARAMETERS = [
+    OpenApiParameter(
+        "search",
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        description="Search title, body, subject, topic, or tags; maximum 200 characters.",
+    ),
+]
 
 
 QUESTION_UPVOTE_RESPONSE = inline_serializer(
@@ -74,6 +111,7 @@ def visible_answer_queryset(request, question_id):
 @extend_schema_view(
     list=extend_schema(
         summary="List questions",
+        parameters=QUESTION_LIST_PARAMETERS,
         responses=QuestionSerializer(many=True),
     ),
     retrieve=extend_schema(
@@ -138,7 +176,7 @@ class QuestionViewSet(
             if author_id < 1:
                 return queryset.none()
             queryset = queryset.filter(author_id=author_id)
-        search = self.request.query_params.get("search", "").strip()
+        search = normalize_search_query(self.request.query_params.get("search", ""), field_name="search")
         if search:
             queryset = queryset.filter(
                 Q(title__icontains=search)
@@ -226,10 +264,11 @@ class AnswerCreateView(ListCreateAPIView):
             )
         except Exception:
             logger.exception(
-                "Unable to create answer notification for question %s after answer %s was created.",
+                "Unable to create answer notification for question %s after answer %s was created; scheduling repair.",
                 question.pk,
                 answer.pk,
             )
+            _queue_answer_notification_repair(answer.pk)
 
 
 @extend_schema_view(
@@ -276,6 +315,7 @@ class CommunityUpvoteView(CreateAPIView):
     throttle_scope = "interaction_write"
     upvote_model = None
     target_field = ""
+    notification_type = None
 
     def get_target(self):
         raise NotImplementedError
@@ -291,6 +331,21 @@ class CommunityUpvoteView(CreateAPIView):
             user=request.user,
             **{self.target_field: target},
         )
+        if created and self.notification_type and target.author_id != request.user.pk:
+            try:
+                create_notification(
+                    recipient=target.author,
+                    actor=request.user,
+                    notification_type=self.notification_type,
+                    related_object=target,
+                )
+            except Exception:
+                logger.exception(
+                    "Unable to create community notification target_id=%s actor_id=%s notification_type=%s",
+                    target.pk,
+                    request.user.pk,
+                    self.notification_type,
+                )
         return Response(
             {
                 "upvoted": True,
@@ -358,6 +413,7 @@ class QuestionUpvoteView(CommunityUpvoteView):
 class AnswerUpvoteView(CommunityUpvoteView):
     upvote_model = AnswerUpvote
     target_field = "answer"
+    notification_type = Notification.NotificationType.ANSWER_UPVOTED
 
     def get_target(self):
         answers = visible_answer_queryset(self.request, self.kwargs["question_id"])

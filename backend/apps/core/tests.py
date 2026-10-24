@@ -3024,8 +3024,11 @@ class APIViewTests(TestCase):
             ).exists()
         )
 
+    @patch("apps.community.views._queue_answer_notification_repair")
     @patch("apps.community.views.create_notification")
-    def test_answer_creation_succeeds_when_notification_creation_fails(self, create_notification_mock):
+    def test_answer_creation_succeeds_when_notification_creation_fails(
+        self, create_notification_mock, queue_repair_mock
+    ):
         create_notification_mock.side_effect = RuntimeError("notification service unavailable")
         self.client.force_authenticate(user=self.other_user)
 
@@ -3036,6 +3039,7 @@ class APIViewTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertTrue(Answer.objects.filter(pk=response.data["id"], question=self.question, author=self.other_user).exists())
         create_notification_mock.assert_called_once()
+        queue_repair_mock.assert_called_once_with(response.data["id"])
 
     def test_question_list_is_paginated_and_serializes_counts(self):
         response = self.client.get("/api/questions/")

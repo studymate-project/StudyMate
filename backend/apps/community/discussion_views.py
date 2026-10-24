@@ -33,16 +33,19 @@ def visible_video(request, video_slug):
 
 
 def visible_discussion_queryset(request, target):
+    comments = _visible_discussion_queryset(request)
+
+    if isinstance(target, Resource):
+        return comments.filter(resource=target)
+    return comments.filter(video=target)
+
+
+def _visible_discussion_queryset(request):
     comments = DiscussionComment.objects.select_related("author", "resource", "video")
     if request.user.is_authenticated:
         comments = comments.filter(Q(status=PublicationStatus.PUBLISHED) | Q(author=request.user))
     else:
         comments = comments.filter(status=PublicationStatus.PUBLISHED)
-
-    if isinstance(target, Resource):
-        comments = comments.filter(resource=target)
-    else:
-        comments = comments.filter(video=target)
 
     if request.user.is_authenticated:
         like_exists = DiscussionCommentLike.objects.filter(comment=OuterRef("pk"), user=request.user)
@@ -63,9 +66,15 @@ class DiscussionTargetView(ListCreateAPIView):
     target_kind = None
 
     def get_target(self):
+        if hasattr(self, "_discussion_target"):
+            return self._discussion_target
+
         if self.target_kind == "resource":
-            return visible_resource(self.request, self.kwargs["resource_id"])
-        return visible_video(self.request, self.kwargs["video_slug"])
+            target = visible_resource(self.request, self.kwargs["resource_id"])
+        else:
+            target = visible_video(self.request, self.kwargs["video_slug"])
+        self._discussion_target = target
+        return target
 
     def get_permissions(self):
         if self.request.method in SAFE_METHODS:
@@ -110,10 +119,14 @@ class DiscussionCommentDetailView(RetrieveDestroyAPIView):
         return [IsAuthenticated(), IsDiscussionCommentAuthorOrReadOnly()]
 
     def get_queryset(self):
-        comments = DiscussionComment.objects.select_related("author", "resource", "video")
-        if self.request.user.is_authenticated:
-            return comments.filter(Q(status=PublicationStatus.PUBLISHED) | Q(author=self.request.user))
-        return comments.filter(status=PublicationStatus.PUBLISHED)
+        comments = _visible_discussion_queryset(self.request)
+        if self.request.method not in SAFE_METHODS:
+            return comments
+
+        reply_queryset = _visible_discussion_queryset(self.request).order_by("created_at", "pk")
+        return comments.prefetch_related(
+            Prefetch("replies", queryset=reply_queryset)
+        )
 
 
 class DiscussionCommentLikeView(APIView):

@@ -5,8 +5,9 @@ import {
   CSRF_BOOTSTRAP_PATH,
   CSRF_COOKIE_NAME,
   CSRF_HEADER_NAME,
-} from './config'
-import { normalizeApiError } from './errors'
+} from './config.js'
+import { normalizeApiError } from './errors.js'
+import { createRefreshCoordinator, isRefreshEndpoint } from './authRefresh.js'
 
 const unsafeMethods = new Set(['post', 'put', 'patch', 'delete'])
 
@@ -25,7 +26,6 @@ const csrfBootstrapClient = axios.create({
 })
 
 let csrfBootstrapRequest
-let refreshRequest
 let csrfToken
 
 async function ensureCsrfCookie({ force = false } = {}) {
@@ -77,19 +77,21 @@ export const apiClient = axios.create({
 
 function canRefreshRequest(config) {
   if (!config || config._authRetry || config._skipAuthRefresh) return false
-  const path = config.url || ''
-  return !['/auth/login/', '/auth/signup/', '/auth/refresh/', '/auth/logout/'].some((endpoint) => path.includes(endpoint))
+  const path = String(config.url || '').split('?')[0]
+  if (isRefreshEndpoint(config)) return false
+  return !['/auth/login/', '/auth/signup/', '/auth/logout/'].some((endpoint) => path === endpoint || path.endsWith(endpoint))
 }
 
-async function refreshAccessCookie() {
-  if (!refreshRequest) {
-    refreshRequest = apiClient
-      .post('/auth/refresh/', null, { _authRetry: true })
-      .finally(() => {
-        refreshRequest = undefined
-      })
-  }
-  return refreshRequest
+const refreshCoordinator = createRefreshCoordinator(() => (
+  apiClient.post('/auth/refresh/', null, { _authRetry: true })
+))
+
+export function refreshAccessCookie() {
+  return refreshCoordinator.request()
+}
+
+export function resetRefreshState() {
+  refreshCoordinator.reset()
 }
 
 apiClient.interceptors.request.use(async (config) => {

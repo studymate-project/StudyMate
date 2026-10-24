@@ -1,11 +1,7 @@
 import { apiClient } from './client'
+import { getNotificationCategory, getNotificationTarget } from './notificationTargets'
 
-const categoryByNotificationType = {
-  question_answered: 'Answers',
-  answer_upvoted: 'Upvotes',
-  resource_upvoted: 'Upvotes',
-  resource_saved: 'Resources',
-}
+export { getNotificationCategory, getNotificationTarget, matchesNotificationTab, openNotificationTarget } from './notificationTargets'
 
 const notificationTypeLabels = {
   question_answered: 'Question answered',
@@ -76,25 +72,15 @@ function getGroup(value) {
   return 'Earlier'
 }
 
-function getInternalTarget(notification, actor) {
-  const payloadTarget = notification.payload?.target || notification.payload?.url
-  if (typeof payloadTarget === 'string' && payloadTarget.startsWith('/')) return payloadTarget
-
-  if (notification.notification_type === 'new_follower' && actor?.username) {
-    return `/users/${encodeURIComponent(actor.username)}`
-  }
-
-  return null
-}
-
 export function normalizeNotification(notification) {
   const actor = notification.actor || null
   const typeLabel = notificationTypeLabels[notification.notification_type] || notification.notification_type || 'Notification'
+  const target = getNotificationTarget(notification, actor)
 
   return {
     id: notification.id,
     notificationType: notification.notification_type,
-    type: categoryByNotificationType[notification.notification_type] || 'Other',
+    type: getNotificationCategory(notification.notification_type, target),
     actor: {
       id: actor?.id,
       username: actor?.username,
@@ -105,7 +91,9 @@ export function normalizeNotification(notification) {
     time: formatRelativeTime(notification.created_at),
     group: getGroup(notification.created_at),
     unread: !notification.is_read,
-    target: getInternalTarget(notification, actor),
+    target: target?.url || null,
+    targetKind: target?.kind || null,
+    resourceType: target?.resourceType || null,
     contentType: notification.content_type,
     objectId: notification.object_id,
     payload: notification.payload || {},

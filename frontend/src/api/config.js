@@ -1,4 +1,4 @@
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL
+const configuredApiBaseUrl = import.meta.env?.VITE_API_BASE_URL
 
 // The relative fallback supports same-origin deployments while local and
 // cross-origin development should set VITE_API_BASE_URL explicitly.

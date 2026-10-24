@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Prefetch
@@ -20,6 +22,11 @@ from apps.core.schema import BAD_REQUEST, NOT_FOUND, UNAUTHENTICATED
 from .models import StudentProfile
 from .serializers import OnboardingSerializer, StudentProfileSerializer
 from apps.interactions.models import UserFollow
+from apps.notifications.models import Notification
+from apps.notifications.services import create_notification
+
+
+logger = logging.getLogger(__name__)
 
 
 ONBOARDING_RESPONSE = inline_serializer(
@@ -143,6 +150,20 @@ class StudentProfileViewSet(UpdateModelMixin, ReadOnlyModelViewSet):
                 )
         except IntegrityError as exc:
             raise ValidationError({"detail": "Unable to follow this profile."}) from exc
+        if created:
+            try:
+                create_notification(
+                    recipient=target_user,
+                    actor=request.user,
+                    notification_type=Notification.NotificationType.NEW_FOLLOWER,
+                    related_object=request.user,
+                )
+            except Exception:
+                logger.exception(
+                    "Unable to create follower notification follower_id=%s followed_id=%s",
+                    request.user.pk,
+                    target_user.pk,
+                )
         return Response(
             {"is_following": True},
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,

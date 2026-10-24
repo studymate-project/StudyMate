@@ -83,6 +83,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'apps.core.db_observability.SlowQueryLoggingMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -145,6 +146,22 @@ if DB_CONN_MAX_AGE < 0:
 DATABASES['default']['CONN_MAX_AGE'] = DB_CONN_MAX_AGE
 DATABASES['default']['CONN_HEALTH_CHECKS'] = env.bool('DB_CONN_HEALTH_CHECKS', default=True)
 
+# Request-scoped query timing uses Django's execute-wrapper API. It logs only
+# slow-query metadata (duration, SQL verb, request method and route), never SQL
+# text or parameters. Debug/local mode stays quiet unless explicitly enabled.
+DB_SLOW_QUERY_LOGGING_ENABLED = env.bool(
+    'DB_SLOW_QUERY_LOGGING_ENABLED',
+    default=not DEBUG,
+)
+DB_SLOW_QUERY_THRESHOLD_MS = env.float(
+    'DB_SLOW_QUERY_THRESHOLD_MS',
+    default=250.0,
+)
+if DB_SLOW_QUERY_THRESHOLD_MS <= 0 or DB_SLOW_QUERY_THRESHOLD_MS > 60000:
+    raise ImproperlyConfigured(
+        'DB_SLOW_QUERY_THRESHOLD_MS must be greater than 0 and no more than 60000.'
+    )
+
 
 def _build_cache_config(redis_url: str, debug: bool) -> dict:
     """Use shared Redis when configured and fail closed for production."""
@@ -179,6 +196,10 @@ CACHES = _build_cache_config(REDIS_URL, DEBUG)
 # desired. Falling back to REDIS_URL keeps the existing Upstash cache setup
 # usable without duplicating a secret in deployment configuration.
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL).strip()
+if not DEBUG and not CELERY_BROKER_URL:
+    raise ImproperlyConfigured(
+        'Production Celery configuration requires CELERY_BROKER_URL or REDIS_URL.'
+    )
 if CELERY_BROKER_URL:
     celery_broker_scheme = urlsplit(CELERY_BROKER_URL).scheme.casefold()
     if celery_broker_scheme not in {'redis', 'rediss'}:
@@ -197,6 +218,20 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_DEFAULT_QUEUE = 'celery'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_WORKER_SEND_TASK_EVENTS = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TASK_SOFT_TIME_LIMIT = env.int('CELERY_TASK_SOFT_TIME_LIMIT', default=60)
+CELERY_TASK_TIME_LIMIT = env.int('CELERY_TASK_TIME_LIMIT', default=120)
+if CELERY_TASK_SOFT_TIME_LIMIT <= 0 or CELERY_TASK_TIME_LIMIT <= 0:
+    raise ImproperlyConfigured(
+        'Celery task time limits must be positive integers.'
+    )
+if CELERY_TASK_SOFT_TIME_LIMIT >= CELERY_TASK_TIME_LIMIT:
+    raise ImproperlyConfigured(
+        'CELERY_TASK_SOFT_TIME_LIMIT must be less than CELERY_TASK_TIME_LIMIT.'
+    )
 
 # Email backend configuration is environment-driven so the Celery worker and
 # web process use the same delivery settings. Tests override EMAIL_BACKEND
@@ -254,6 +289,43 @@ if RESOURCE_MAX_FILE_SIZE_BYTES <= 0:
 RESOURCE_RATING_MIN_COUNT = env.int('RESOURCE_RATING_MIN_COUNT', default=5)
 if RESOURCE_RATING_MIN_COUNT <= 0:
     raise ImproperlyConfigured('RESOURCE_RATING_MIN_COUNT must be greater than zero.')
+
+SUBJECT_RECOMMENDATION_CACHE_TTL_SECONDS = env.int(
+    'SUBJECT_RECOMMENDATION_CACHE_TTL_SECONDS',
+    default=600,
+)
+SUBJECT_RECOMMENDATION_CACHE_TTL_JITTER_SECONDS = env.int(
+    'SUBJECT_RECOMMENDATION_CACHE_TTL_JITTER_SECONDS',
+    default=30,
+)
+if not 300 <= SUBJECT_RECOMMENDATION_CACHE_TTL_SECONDS <= 900:
+    raise ImproperlyConfigured(
+        'SUBJECT_RECOMMENDATION_CACHE_TTL_SECONDS must be between 300 and 900 seconds.'
+    )
+if (
+    SUBJECT_RECOMMENDATION_CACHE_TTL_JITTER_SECONDS < 0
+    or SUBJECT_RECOMMENDATION_CACHE_TTL_SECONDS - SUBJECT_RECOMMENDATION_CACHE_TTL_JITTER_SECONDS < 300
+    or SUBJECT_RECOMMENDATION_CACHE_TTL_SECONDS + SUBJECT_RECOMMENDATION_CACHE_TTL_JITTER_SECONDS > 900
+):
+    raise ImproperlyConfigured(
+        'SUBJECT_RECOMMENDATION_CACHE_TTL_JITTER_SECONDS must keep the effective TTL between 300 and 900 seconds.'
+    )
+SUBJECT_RECOMMENDATION_CACHE_VERSION_TTL_SECONDS = env.int(
+    'SUBJECT_RECOMMENDATION_CACHE_VERSION_TTL_SECONDS',
+    default=1800,
+)
+if SUBJECT_RECOMMENDATION_CACHE_VERSION_TTL_SECONDS < (
+    SUBJECT_RECOMMENDATION_CACHE_TTL_SECONDS
+    + SUBJECT_RECOMMENDATION_CACHE_TTL_JITTER_SECONDS
+):
+    raise ImproperlyConfigured(
+        'SUBJECT_RECOMMENDATION_CACHE_VERSION_TTL_SECONDS must be at least the maximum subject cache TTL.'
+    )
+
+# Metrics are opt-in because each recorded cache event is an additional cache
+# write. The counters are namespace-scoped and retained briefly; they are not
+# a substitute for provider-level Redis memory or billing metrics.
+CACHE_METRICS_ENABLED = env.bool('CACHE_METRICS_ENABLED', default=False)
 
 PROFILE_AVATAR_MAX_FILE_SIZE_BYTES = env.int('PROFILE_AVATAR_MAX_FILE_SIZE_BYTES', default=5 * 1024 * 1024)
 if PROFILE_AVATAR_MAX_FILE_SIZE_BYTES <= 0:
@@ -337,6 +409,20 @@ SIGNUP_OTP_EMAIL_RATE_WINDOW_SECONDS = env.int(
     'SIGNUP_OTP_EMAIL_RATE_WINDOW_SECONDS', default=3600
 )
 
+# Retention cleanup is deliberately opt-in.  The only currently eligible
+# records are completed signup-verification bookkeeping rows; user history,
+# notifications, analytics events, and security/audit records are not cleaned
+# up by this policy.
+RETENTION_CLEANUP_ENABLED = env.bool('RETENTION_CLEANUP_ENABLED', default=False)
+SIGNUP_VERIFICATION_CLEANUP_RETENTION_SECONDS = env.int(
+    'SIGNUP_VERIFICATION_CLEANUP_RETENTION_SECONDS', default=0
+)
+RETENTION_CLEANUP_BATCH_SIZE = env.int('RETENTION_CLEANUP_BATCH_SIZE', default=100)
+RETENTION_CLEANUP_MAX_BATCHES = env.int('RETENTION_CLEANUP_MAX_BATCHES', default=10)
+RETENTION_CLEANUP_BATCH_PAUSE_SECONDS = env.int(
+    'RETENTION_CLEANUP_BATCH_PAUSE_SECONDS', default=0
+)
+
 if not 4 <= SIGNUP_OTP_LENGTH <= 8:
     raise ImproperlyConfigured('SIGNUP_OTP_LENGTH must be between 4 and 8 digits.')
 if SIGNUP_OTP_TTL_SECONDS <= 0 or SIGNUP_OTP_MAX_ATTEMPTS <= 0:
@@ -345,6 +431,33 @@ if SIGNUP_OTP_RESEND_COOLDOWN_SECONDS < 0:
     raise ImproperlyConfigured('SIGNUP_OTP_RESEND_COOLDOWN_SECONDS cannot be negative.')
 if SIGNUP_OTP_EMAIL_RATE_LIMIT <= 0 or SIGNUP_OTP_EMAIL_RATE_WINDOW_SECONDS <= 0:
     raise ImproperlyConfigured('Signup OTP email rate settings must be positive.')
+if SIGNUP_VERIFICATION_CLEANUP_RETENTION_SECONDS < 0:
+    raise ImproperlyConfigured(
+        'SIGNUP_VERIFICATION_CLEANUP_RETENTION_SECONDS cannot be negative.'
+    )
+if not 1 <= RETENTION_CLEANUP_BATCH_SIZE <= 1000:
+    raise ImproperlyConfigured(
+        'RETENTION_CLEANUP_BATCH_SIZE must be between 1 and 1000.'
+    )
+if not 1 <= RETENTION_CLEANUP_MAX_BATCHES <= 100:
+    raise ImproperlyConfigured(
+        'RETENTION_CLEANUP_MAX_BATCHES must be between 1 and 100.'
+    )
+if not 0 <= RETENTION_CLEANUP_BATCH_PAUSE_SECONDS <= 60:
+    raise ImproperlyConfigured(
+        'RETENTION_CLEANUP_BATCH_PAUSE_SECONDS must be between 0 and 60.'
+    )
+if (
+    RETENTION_CLEANUP_BATCH_PAUSE_SECONDS * RETENTION_CLEANUP_MAX_BATCHES
+    >= CELERY_TASK_SOFT_TIME_LIMIT
+):
+    raise ImproperlyConfigured(
+        'Retention cleanup pacing must fit within the Celery soft time limit.'
+    )
+if RETENTION_CLEANUP_ENABLED and SIGNUP_VERIFICATION_CLEANUP_RETENTION_SECONDS <= 0:
+    raise ImproperlyConfigured(
+        'Enabled retention cleanup requires an explicit signup-verification retention window.'
+    )
 
 # CORS is deliberately limited to the configured frontend origin. Credentials
 # are enabled for the HTTP-only-cookie authentication design.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getApiErrorMessage, listNotifications, markAllNotificationsRead, markNotificationRead } from '../api'
+import { getApiErrorMessage, listNotifications, markAllNotificationsRead, markNotificationRead, matchesNotificationTab } from '../api'
 import Badge from '../components/common/Badge'
 import Button from '../components/common/Button'
 import Spinner from '../components/common/Spinner'
@@ -41,7 +41,8 @@ function Notifications() {
   }, [reloadKey])
 
   const unreadCount = notifications.filter((notification) => notification.unread).length
-  const visible = useMemo(() => activeTab === 'All' ? notifications : notifications.filter((notification) => notification.type === activeTab), [activeTab, notifications])
+  const visible = useMemo(() => notifications.filter((notification) => matchesNotificationTab(notification, activeTab)), [activeTab, notifications])
+  const isComingSoon = activeTab === 'Mentions'
   const retry = () => {
     setStatus('loading')
     setError(null)
@@ -99,7 +100,11 @@ function Notifications() {
     }
   }
 
-  return <><main className="mx-auto min-h-[calc(100svh-8rem)] w-full max-w-[1260px] px-5 py-7 sm:px-8 lg:px-10"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-3"><h1 className="text-2xl font-bold text-white sm:text-3xl">Notifications</h1>{unreadCount ? <Badge className="min-h-6 text-xs">{unreadCount} New</Badge> : null}</div><p className="mt-2 text-sm font-medium text-[var(--color-text)]">Stay updated with activity on your account.</p></div><Button variant="secondary" className="self-start text-sm" onClick={markAllRead} disabled={markingAllRead}>{markingAllRead ? 'Marking...' : 'Mark all as read'}</Button></div><div className="mt-5"><NotificationTabs tabs={notificationTabs} activeTab={activeTab} onChange={setActiveTab} /></div>{visible.length ? groups.map((group) => <NotificationGroup key={group} title={group} notifications={visible.filter((notification) => notification.group === group)} onRead={markRead} />) : <section className="mt-7 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center"><h2 className="text-lg font-semibold text-white">No notifications here</h2><p className="mt-2 text-sm text-[var(--color-text)]">Try another filter or check back when there is new activity.</p></section>}{!unreadCount && visible.length ? <p className="mt-6 text-center text-sm text-[var(--color-text)]">You are all caught up.</p> : null}</main><Footer />{toast ? <Toast {...toast} onDismiss={() => setToast(null)} /> : null}</>
+  return <><main className="mx-auto min-h-[calc(100svh-8rem)] w-full max-w-[1260px] px-5 py-7 sm:px-8 lg:px-10"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-3"><h1 className="text-2xl font-bold text-white sm:text-3xl">Notifications</h1>{unreadCount ? <Badge className="min-h-6 text-xs">{unreadCount} New</Badge> : null}</div><p className="mt-2 text-sm font-medium text-[var(--color-text)]">Stay updated with activity on your account.</p></div><Button variant="secondary" className="self-start text-sm" onClick={markAllRead} disabled={markingAllRead}>{markingAllRead ? 'Marking...' : 'Mark all as read'}</Button></div><div className="mt-5"><NotificationTabs tabs={notificationTabs} activeTab={activeTab} onChange={setActiveTab} /></div>{isComingSoon ? <ComingSoonNotificationFeature /> : visible.length ? groups.map((group) => <NotificationGroup key={group} title={group} notifications={visible.filter((notification) => notification.group === group)} onRead={markRead} />) : <section className="mt-7 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center"><h2 className="text-lg font-semibold text-white">No notifications here</h2><p className="mt-2 text-sm text-[var(--color-text)]">Try another filter or check back when there is new activity.</p></section>}{!isComingSoon && !unreadCount && visible.length ? <p className="mt-6 text-center text-sm text-[var(--color-text)]">You are all caught up.</p> : null}</main><Footer />{toast ? <Toast {...toast} onDismiss={() => setToast(null)} /> : null}</>
+}
+
+function ComingSoonNotificationFeature() {
+  return <section className="mt-7 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center" aria-labelledby="mentions-coming-soon"><h2 id="mentions-coming-soon" className="text-lg font-semibold text-white">Mentions are coming soon</h2><p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-[var(--color-text)]">Mention notifications are not available yet. This filter will be enabled when StudyMate adds mention tracking.</p></section>
 }
 
 function NotificationsPageState({ title, message, action = null, loadingLabel = '' }) {

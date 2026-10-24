@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "node --test --test-isolation=none src/api/authRefresh.test.js src/api/notifications.test.js src/api/videos.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

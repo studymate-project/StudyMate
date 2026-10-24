@@ -127,6 +127,10 @@ class SignupEmailVerification(models.Model):
     expires_at = models.DateTimeField()
     attempts = models.PositiveSmallIntegerField(default=0)
     last_sent_at = models.DateTimeField(null=True, blank=True)
+    # ``last_sent_at`` records broker enqueue time for resend cooldowns. This
+    # separate marker records successful email-backend delivery so duplicate
+    # task executions can avoid repeating the side effect.
+    email_sent_at = models.DateTimeField(null=True, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

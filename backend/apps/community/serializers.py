@@ -127,7 +127,8 @@ class DiscussionReplySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_like_count(self, comment: DiscussionComment) -> int:
-        return getattr(comment, "like_count", comment.likes.count())
+        like_count = getattr(comment, "like_count", None)
+        return int(like_count) if like_count is not None else comment.likes.count()
 
     def get_liked(self, comment: DiscussionComment) -> bool:
         return bool(getattr(comment, "liked_by_request_user", False))
@@ -189,7 +190,8 @@ class DiscussionCommentSerializer(serializers.ModelSerializer):
         return parent
 
     def get_like_count(self, comment: DiscussionComment) -> int:
-        return getattr(comment, "like_count", comment.likes.count())
+        like_count = getattr(comment, "like_count", None)
+        return int(like_count) if like_count is not None else comment.likes.count()
 
     def get_liked(self, comment: DiscussionComment) -> bool:
         return bool(getattr(comment, "liked_by_request_user", False))

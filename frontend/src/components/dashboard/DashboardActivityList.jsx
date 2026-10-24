@@ -1,9 +1,10 @@
 import { Bookmark, ChevronRight } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
+import { openNotificationTarget } from '../../api/notifications'
 
 export function RecentNotifications({ notifications }) {
   const navigate = useNavigate()
-  return <DashboardSection title="Recent notifications" to="/notifications">{notifications.length ? notifications.map((notification) => <button type="button" onClick={() => notification.target && navigate(notification.target)} key={notification.id} className="flex w-full items-start gap-3 border-b border-[var(--color-border)] px-3 py-3 text-left last:border-b-0 hover:bg-[var(--color-surface-muted)]"><span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--color-info)]" /><span><span className="block text-xs font-medium text-white">{notification.message}</span><span className="mt-1 block text-xs text-[var(--color-text)]">{notification.time}</span></span></button>) : <p className="px-3 py-4 text-xs text-[var(--color-text)]">No recent notifications.</p>}</DashboardSection>
+  return <DashboardSection title="Recent notifications" to="/notifications">{notifications.length ? notifications.map((notification) => <button type="button" disabled={!notification.target} onClick={() => openNotificationTarget(notification, navigate)} key={notification.id} className="flex w-full items-start gap-3 border-b border-[var(--color-border)] px-3 py-3 text-left last:border-b-0 hover:bg-[var(--color-surface-muted)] disabled:cursor-default disabled:opacity-70"><span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--color-info)]" /><span><span className="block text-xs font-medium text-white">{notification.message}</span><span className="mt-1 block text-xs text-[var(--color-text)]">{notification.target ? notification.time : `${notification.time} · Target unavailable`}</span></span></button>) : <p className="px-3 py-4 text-xs text-[var(--color-text)]">No recent notifications.</p>}</DashboardSection>
 }
 
 export function RecentSaves({ resources }) {

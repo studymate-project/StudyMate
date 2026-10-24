@@ -9,7 +9,7 @@ function ResourceCard({ resource }) {
   return (
     <Link
       to={`/resources/${resource.slug}`}
-      className="block min-h-[250px] border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-primary-light)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
+      className="block min-h-[250px] border-2 rounded-lg border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-primary-light)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
     >
       <div className={`${resource.colorClass} flex h-14 w-14 items-center justify-center rounded-lg text-[var(--color-primary-light)]`}>
         <FileText size={25} />
