@@ -44,7 +44,7 @@ export function createRefreshCoordinator(refresh, { now = Date.now, fallbackCool
       })
       .catch((error) => {
         blockedError = error
-        if (error?.status === 401) {
+        if (error?.status === 401 || error?.status === 403) {
           permanentlyUnavailable = true
         } else if (error?.status === 429) {
           blockedUntil = now() + getRetryAfterMs(error, now(), fallbackCooldownMs)

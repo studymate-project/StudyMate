@@ -20,10 +20,9 @@ function AuthError({ error, onRetry }) {
 }
 
 export function AuthGate({ children }) {
-  const { status, error, retryInitialization } = useAuth()
+  const { status } = useAuth()
 
   if (status === 'loading') return <AuthLoading />
-  if (status === 'error') return <AuthError error={error} onRetry={retryInitialization} />
 
   return children
 }

@@ -1,8 +1,10 @@
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.education.models import AcademicLevel, Course, EducationBackground, Interest, StudentInterest
 from apps.users.models import StudentProfile
@@ -87,6 +89,30 @@ class AuthenticationCSRFTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_refresh_without_a_cookie_is_unauthenticated_not_a_csrf_failure(self):
+        response = self.client.post("/api/auth/refresh/", {}, format="json")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["detail"], "Invalid or expired refresh token.")
+
+    def test_refresh_with_a_valid_cookie_still_requires_csrf(self):
+        user = get_user_model().objects.get(email="csrf-user@example.com")
+        self.client.cookies[settings.JWT_REFRESH_COOKIE_NAME] = str(RefreshToken.for_user(user))
+
+        response = self.client.post("/api/auth/refresh/", {}, format="json")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_refresh_with_an_expired_cookie_is_unauthenticated_before_csrf(self):
+        user = get_user_model().objects.get(email="csrf-user@example.com")
+        expired = RefreshToken.for_user(user)
+        expired["exp"] = 0
+        self.client.cookies[settings.JWT_REFRESH_COOKIE_NAME] = str(expired)
+
+        response = self.client.post("/api/auth/refresh/", {}, format="json")
+
+        self.assertEqual(response.status_code, 401)
 
     @override_settings(
         CORS_ALLOWED_ORIGINS=["https://studymate.vercel.app"],

@@ -353,10 +353,21 @@ class RefreshView(APIView):
         responses={200: REFRESH_RESPONSE, 401: UNAUTHENTICATED, 403: FORBIDDEN},
     )
     def post(self, request: Request) -> Response:
-        enforce_cookie_csrf(request)
         raw_refresh = request.COOKIES.get(settings.JWT_REFRESH_COOKIE_NAME)
         if not raw_refresh:
             return Response({"detail": "Invalid or expired refresh token."}, status=401)
+
+        # A browser with no usable refresh token is simply logged out. Check
+        # the token without rotating it before CSRF enforcement so an expired
+        # cookie does not become a misleading CSRF 403. A valid refresh token
+        # still has to pass CSRF validation before the serializer can rotate
+        # or blacklist anything.
+        try:
+            RefreshToken(raw_refresh)
+        except TokenError:
+            return Response({"detail": "Invalid or expired refresh token."}, status=401)
+
+        enforce_cookie_csrf(request)
 
         serializer = TokenRefreshSerializer(data={"refresh": raw_refresh})
         try:

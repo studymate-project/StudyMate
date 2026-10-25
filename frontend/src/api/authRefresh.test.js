@@ -38,6 +38,23 @@ test('refresh 401 is remembered until a successful login resets the coordinator'
   assert.equal(calls, 2)
 })
 
+test('refresh 403 is remembered so a CSRF failure cannot trigger repeated requests', async () => {
+  let calls = 0
+  const error = { status: 403 }
+  const coordinator = createRefreshCoordinator(async () => {
+    calls += 1
+    throw error
+  })
+
+  await assert.rejects(coordinator.request(), (received) => received === error)
+  await assert.rejects(coordinator.request(), (received) => received === error)
+  assert.equal(calls, 1)
+
+  coordinator.reset()
+  await assert.rejects(coordinator.request(), (received) => received === error)
+  assert.equal(calls, 2)
+})
+
 test('refresh 429 honors Retry-After and does not immediately retry', async () => {
   let now = 1_000
   let calls = 0
