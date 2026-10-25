@@ -181,6 +181,39 @@ class VideoAPIYouTubeURLTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_video_delete_is_restricted_to_the_uploader(self):
+        video = Video.objects.create(
+            title="Owned video",
+            uploader=self.user,
+            youtube_video_id="dQw4w9WgXcQ",
+            subject="Physics",
+            status=PublicationStatus.PUBLISHED,
+        )
+
+        self.client.force_authenticate(user=self.other_user)
+        forbidden = self.client.delete(f"/api/videos/{video.slug}/")
+        self.assertEqual(forbidden.status_code, 403)
+        self.assertTrue(Video.objects.filter(pk=video.pk).exists())
+
+        self.client.force_authenticate(user=self.user)
+        deleted = self.client.delete(f"/api/videos/{video.slug}/")
+        self.assertEqual(deleted.status_code, 204)
+        self.assertFalse(Video.objects.filter(pk=video.pk).exists())
+
+    def test_anonymous_user_cannot_delete_video(self):
+        video = Video.objects.create(
+            title="Protected video",
+            uploader=self.user,
+            youtube_video_id="3JZ_D3ELwOQ",
+            subject="Physics",
+            status=PublicationStatus.PUBLISHED,
+        )
+
+        response = self.client.delete(f"/api/videos/{video.slug}/")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertTrue(Video.objects.filter(pk=video.pk).exists())
+
     def test_rejects_legacy_external_video_url_field(self):
         self.client.force_authenticate(user=self.user)
         response = self.client.post(
@@ -2731,6 +2764,37 @@ class APIViewTests(TestCase):
         self.assertEqual([item["id"] for item in response.data["results"]], [self.resource.pk])
         self.assertNotIn(unsaved_resource.pk, [item["id"] for item in response.data["results"]])
 
+    def test_saved_resource_list_preserves_mixed_resource_types(self):
+        video_resource = Resource.objects.create(
+            title="Saved video resource",
+            uploader=self.user,
+            subject="Physics",
+            resource_type=Resource.ResourceType.VIDEO,
+            status=PublicationStatus.PUBLISHED,
+        )
+        link_resource = Resource.objects.create(
+            title="Saved external reference",
+            uploader=self.user,
+            subject="Physics",
+            resource_type=Resource.ResourceType.LINK,
+            external_url="https://example.test/reference",
+            status=PublicationStatus.PUBLISHED,
+        )
+        SavedResource.objects.bulk_create(
+            [
+                SavedResource(user=self.user, resource=video_resource),
+                SavedResource(user=self.user, resource=link_resource),
+            ]
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get("/api/saved-resources/")
+
+        self.assertEqual(response.status_code, 200)
+        returned = {item["id"]: item["resource_type"] for item in response.data["results"]}
+        self.assertEqual(returned[video_resource.pk], Resource.ResourceType.VIDEO)
+        self.assertEqual(returned[link_resource.pk], Resource.ResourceType.LINK)
+
     def test_saved_resource_list_excludes_another_users_saves(self):
         SavedResource.objects.create(user=self.other_user, resource=self.resource)
         self.client.force_authenticate(user=self.user)
@@ -3596,5 +3660,5 @@ class APIViewTests(TestCase):
         )
 
         self.assertEqual(missing_response.status_code, 404)
-        self.assertEqual(video_delete_response.status_code, 405)
+        self.assertEqual(video_delete_response.status_code, 401)
         self.assertEqual(question_patch_response.status_code, 401)

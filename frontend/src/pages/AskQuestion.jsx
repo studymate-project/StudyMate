@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { createQuestion, getApiErrorMessage, getApiFieldErrors } from '../api'
 import Button from '../components/common/Button'
 import Toast from '../components/common/Toast'
+import { buildAskQuestionPayload } from './askQuestionPayload'
 
 function AskQuestion() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ title: '', body: '', tags: '', subject: 'Java', topic: 'OOP' })
+  const [form, setForm] = useState({ title: '', body: '', subject: 'Java' })
   const [errors, setErrors] = useState({})
   const [posting, setPosting] = useState(false)
   const [toast, setToast] = useState(null)
@@ -23,10 +24,10 @@ function AskQuestion() {
     setPosting(true)
     setErrors({})
     try {
-      const question = await createQuestion({ ...form, title: form.title.trim(), body: form.body.trim(), tag_names: form.tags })
+      const question = await createQuestion(buildAskQuestionPayload(form))
       setCreatedQuestion(question)
       setToast({ message: 'Question posted successfully.', type: 'success' })
-      setForm({ title: '', body: '', tags: '', subject: 'Java', topic: 'OOP' })
+      setForm({ title: '', body: '', subject: 'Java' })
     } catch (error) {
       setErrors(getApiFieldErrors(error))
       setToast({ message: getApiErrorMessage(error), type: 'error' })
@@ -51,10 +52,7 @@ function AskQuestion() {
           <textarea required value={form.body} onChange={(event) => updateField('body', event.target.value)} className="mt-2 min-h-36 w-full border-2 border-[var(--color-border-strong)] bg-[var(--color-bg)] p-4 font-bold text-white outline-none focus:border-[var(--color-primary-light)]" placeholder="Add context, what you tried, and where you are confused." />
           {errors.body ? <span className="mt-1 block text-sm font-bold text-[var(--color-danger)]">{errors.body}</span> : null}
         </label>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Tags" value={form.tags} error={errors.tag_names} onChange={(value) => updateField('tags', value)} placeholder="Java, OOP, Programming" />
-          <Field label="Subject" value={form.subject} error={errors.subject} onChange={(value) => updateField('subject', value)} placeholder="Java" />
-        </div>
+        <Field label="Subject" value={form.subject} error={errors.subject} onChange={(value) => updateField('subject', value)} placeholder="Java" />
         {createdQuestion?.slug ? <p className="border border-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_12%,var(--color-surface))] p-3 font-black text-[var(--color-success)]">Question posted successfully. <a href={`/questions/${createdQuestion.slug}`} className="underline">View question</a></p> : null}
         <div className="flex flex-wrap gap-3">
           <Button type="submit" disabled={posting}>{posting ? 'Posting...' : 'Post Question'}</Button>

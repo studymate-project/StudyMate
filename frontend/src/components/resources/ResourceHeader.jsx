@@ -1,14 +1,20 @@
 import { BookOpen, Download, FileText, Save, Share2 } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { saveResource, unsaveResource } from '../../api/resources'
 import { getApiErrorMessage } from '../../api'
 import { trackResourceDownload } from '../../api/resources'
+import { useAuth } from '../../auth/useAuth'
+import { getLoginState } from '../../auth/navigation'
 import Badge from '../common/Badge'
 import Button from '../common/Button'
 import IconButton from '../common/IconButton'
 import Rating from '../common/Rating'
 
 function ResourceHeader({ resource, author, onDownloadCountChange, descriptionContent }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { status: authStatus } = useAuth()
   const [downloadState, setDownloadState] = useState('idle')
   const [saveState, setSaveState] = useState('idle')
   const [saved, setSaved] = useState(resource.isSaved)
@@ -49,6 +55,10 @@ function ResourceHeader({ resource, author, onDownloadCountChange, descriptionCo
   }
 
   const handleSave = async () => {
+    if (authStatus !== 'authenticated') {
+      navigate('/login', { state: getLoginState(location) })
+      return
+    }
     if (saveState === 'loading') return
 
     setSaveState('loading')

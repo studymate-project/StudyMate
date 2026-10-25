@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
+import { getLoginState } from '../../auth/navigation'
 import Rating from './Rating'
 
 function RatingControl({
@@ -13,6 +14,7 @@ function RatingControl({
   onDelete,
 }) {
   const isAuthenticated = authStatus === 'authenticated'
+  const location = useLocation()
   const [selectedRating, setSelectedRating] = useState(value ?? null)
 
   const submitRating = () => {
@@ -55,7 +57,7 @@ function RatingControl({
             {isSaving ? 'Saving...' : 'Remove my rating'}
           </button>
         ) : !isAuthenticated ? (
-          <Link to="/login" className="text-[var(--color-primary-light)] underline decoration-1 underline-offset-4">
+          <Link to="/login" state={getLoginState(location)} className="text-[var(--color-primary-light)] underline decoration-1 underline-offset-4">
             Sign in to rate
           </Link>
         ) : null}

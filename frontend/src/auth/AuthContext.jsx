@@ -1,16 +1,40 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { clearClientAuthState, getCurrentUser, login, logout, restoreSession, signup } from '../api/auth'
+import { resetRefreshState, setAuthFailureHandler } from '../api/client'
 import { AuthContext } from './context'
+import { getLoginState } from './navigation'
 
 function getAuthStatus(error) {
   return error?.status === 401 ? 'unauthenticated' : 'error'
 }
 
 export function AuthProvider({ children }) {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [user, setUser] = useState(null)
   const [status, setStatus] = useState('loading')
   const [initializationAttempt, setInitializationAttempt] = useState(0)
   const [initializationError, setInitializationError] = useState(null)
+  const sessionInvalidated = useRef(false)
+
+  useEffect(() => {
+    const handleAuthFailure = () => {
+      if (sessionInvalidated.current) return
+      sessionInvalidated.current = true
+      clearClientAuthState()
+      resetRefreshState()
+      setUser(null)
+      setStatus('unauthenticated')
+      setInitializationError(null)
+      void logout().catch(() => {})
+      if (location.pathname !== '/login' && location.pathname !== '/signup') {
+        navigate('/login', { replace: true, state: getLoginState(location) })
+      }
+    }
+
+    return setAuthFailureHandler(handleAuthFailure)
+  }, [location, navigate])
 
   useEffect(() => {
     let active = true
@@ -36,6 +60,7 @@ export function AuthProvider({ children }) {
 
   const signIn = async (credentials) => {
     const result = await login(credentials)
+    sessionInvalidated.current = false
     setUser(result.user)
     setStatus('authenticated')
     setInitializationError(null)
@@ -77,6 +102,7 @@ export function AuthProvider({ children }) {
     }
 
     setUser(null)
+    sessionInvalidated.current = true
     setStatus('unauthenticated')
     setInitializationError(null)
   }

@@ -1,7 +1,7 @@
 import { Bookmark, Filter, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getApiErrorMessage, listSavedResources, unsaveResource } from '../api'
+import { getApiErrorMessage, listAllSavedResources, unsaveResource } from '../api'
 import EmptyState from '../components/common/EmptyState'
 import Button from '../components/common/Button'
 import Spinner from '../components/common/Spinner'
@@ -22,7 +22,7 @@ function SavedResources() {
   useEffect(() => {
     let isActive = true
 
-    listSavedResources().then(
+    listAllSavedResources().then(
       (data) => {
         if (!isActive) return
         setItems(data.resources.map((resource) => ({ id: resource.id, type: 'resource', target: resource })))

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { getApiErrorMessage, getApiFieldErrors } from '../api/errors'
 import { useAuth } from '../auth/useAuth'
+import { getPostAuthDestination } from '../auth/navigation'
 import AuthDivider from '../components/auth/AuthDivider'
 import AuthInput from '../components/auth/AuthInput'
 import AuthLayout from '../components/auth/AuthLayout'
@@ -42,9 +43,7 @@ function Login() {
     setNotice('')
     try {
       const result = await signIn({ email: form.email.trim(), password: form.password })
-      const destination = result.user?.profile?.onboarding_completed
-        ? (typeof location.state?.from === 'string' ? location.state.from : '/home')
-        : '/onboarding'
+      const destination = getPostAuthDestination(result.user, location.state?.from)
       navigate(destination, { replace: true, state: null })
     } catch (error) {
       const fieldErrors = getApiFieldErrors(error)

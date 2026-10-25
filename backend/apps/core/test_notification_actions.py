@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -51,7 +52,8 @@ class NotificationActionTests(TestCase):
             Notification.objects.filter(
                 recipient=self.owner,
                 actor=self.actor,
-                content_object=self.resource,
+                content_type=ContentType.objects.get_for_model(self.resource),
+                object_id=self.resource.pk,
                 notification_type=Notification.NotificationType.RESOURCE_SAVED,
             ).count(),
             1,
@@ -60,7 +62,8 @@ class NotificationActionTests(TestCase):
             Notification.objects.filter(
                 recipient=self.owner,
                 actor=self.actor,
-                content_object=self.resource,
+                content_type=ContentType.objects.get_for_model(self.resource),
+                object_id=self.resource.pk,
                 notification_type=Notification.NotificationType.RESOURCE_UPVOTED,
             ).count(),
             1,
@@ -78,7 +81,8 @@ class NotificationActionTests(TestCase):
                 recipient=self.owner,
                 actor=self.actor,
                 notification_type=Notification.NotificationType.ANSWER_UPVOTED,
-                content_object=self.answer,
+                content_type=ContentType.objects.get_for_model(self.answer),
+                object_id=self.answer.pk,
             ).exists()
         )
         self.assertTrue(
@@ -86,6 +90,7 @@ class NotificationActionTests(TestCase):
                 recipient=self.owner,
                 actor=self.actor,
                 notification_type=Notification.NotificationType.NEW_FOLLOWER,
-                content_object=self.actor,
+                content_type=ContentType.objects.get_for_model(self.actor),
+                object_id=self.actor.pk,
             ).exists()
         )

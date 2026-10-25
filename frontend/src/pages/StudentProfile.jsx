@@ -6,7 +6,7 @@ import ProfileHeader from '../components/profile/ProfileHeader'
 import ProfileResources from '../components/profile/ProfileResources'
 import { Achievements, RecentAnswers, RecentQuestions } from '../components/profile/ProfileSidebar'
 import { getApiErrorMessage } from '../api/errors'
-import { getCurrentProfile, updateProfile } from '../api/profile'
+import { clearCurrentProfileCache, deleteResource, deleteVideo, getCurrentProfile, unsaveResource, updateProfile } from '../api'
 import { useAuth } from '../auth/useAuth'
 
 const tabs = ['Resources', 'Questions', 'Answers', 'Saved Resources']
@@ -17,6 +17,23 @@ function StudentProfile() {
   const [profileState, setProfileState] = useState({ status: 'loading', data: null, error: null })
   const [reloadKey, setReloadKey] = useState(0)
   const [avatarState, setAvatarState] = useState({ status: 'idle', error: '' })
+
+  const removeUploadedResource = async (resource) => {
+    if (resource.targetType === 'video') await deleteVideo(resource.slug)
+    else await deleteResource(resource.id)
+    clearCurrentProfileCache()
+    setProfileState((current) => current.data
+      ? { ...current, data: { ...current.data, profile: { ...current.data.profile, resources: current.data.profile.resources.filter((item) => !(item.id === resource.id && item.targetType === resource.targetType)) } } }
+      : current)
+  }
+
+  const removeSavedResource = async (resource) => {
+    await unsaveResource(resource.id)
+    clearCurrentProfileCache()
+    setProfileState((current) => current.data
+      ? { ...current, data: { ...current.data, profile: { ...current.data.profile, savedResources: current.data.profile.savedResources.filter((item) => item.id !== resource.id) } } }
+      : current)
+  }
 
   useEffect(() => {
     let isActive = true
@@ -84,12 +101,12 @@ function StudentProfile() {
 
   const { user, profile } = profileState.data
   const tabContent = activeTab === 'Resources'
-    ? <ProfileResources resources={profile.resources} />
+    ? <ProfileResources resources={profile.resources} onDelete={removeUploadedResource} />
     : activeTab === 'Questions'
       ? <RecentQuestions questions={profile.recentQuestions} />
       : activeTab === 'Answers'
         ? <RecentAnswers answers={profile.recentAnswers} />
-        : <ProfileResources resources={profile.savedResources} title="Saved resources" empty="No saved resources yet." />
+        : <ProfileResources resources={profile.savedResources} title="Saved resources" empty="No saved resources yet. Explore resources and save the ones you want to revisit." onUnsave={removeSavedResource} />
 
   return <><ProfileHeader user={user} profile={profile} editable avatarBusy={avatarState.status === 'loading'} avatarError={avatarState.error} onAvatarFile={updateAvatar} onAvatarUrl={updateAvatar} action={<Button to="/profile/edit" variant="secondary" className="min-h-9 px-4 text-sm">Edit Profile</Button>} /><main className="mx-auto min-h-[calc(100svh-26rem)] w-full max-w-[1260px] px-5 py-7 sm:px-8 lg:px-10"><ProfileDetails profile={profile} /><div className="mt-7 overflow-x-auto border-b border-[var(--color-border)]"><div className="flex min-w-max justify-between gap-7" role="tablist" aria-label="Profile content">{tabs.map((tab) => <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`min-h-12 border-b-[3px] px-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] ${activeTab === tab ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary-light)]' : 'border-transparent text-[var(--color-text)] hover:text-white'}`}>{tab}</button>)}</div></div><div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]"><section>{tabContent}</section><aside className="space-y-6"><Achievements achievements={profile.achievements} /><RecentQuestions questions={profile.recentQuestions} /></aside></div></main><Footer /></>
 }

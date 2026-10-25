@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { getApiErrorMessage, listQuestions } from '../api'
 import Button from '../components/common/Button'
 import Spinner from '../components/common/Spinner'
+import QuestionDescription from '../components/community/QuestionDescription'
 
 const tabs = ['Latest', 'Trending', 'Unanswered', 'Popular']
 const topics = ['Java', 'DSA', 'DBMS', 'OS', 'React', 'Python']
@@ -107,6 +108,7 @@ function CommunityQuestionCard({ question }) {
       </div>
       <div className="min-w-0">
         <h2 className="break-words text-base font-black text-white">{question.title}</h2>
+        <QuestionDescription description={question.body} className="relative mt-2" />
         <div className="mt-3 flex flex-wrap gap-2">{question.tags.map((tag) => <span key={tag} className="rounded-lg bg-[var(--color-primary)] px-3 py-1 font-black text-[var(--color-primary-dark)]">#{tag}</span>)}</div>
         <p className="mt-3 text-sm font-black text-[var(--color-text)]">Asked by {author?.name || 'StudyMate member'} - {question.createdAt || 'Date unavailable'}</p>
       </div>

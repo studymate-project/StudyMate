@@ -44,7 +44,7 @@ function AppRoutes() {
             <Route path="signup" element={<PublicOnlyRoute><LazyPage><Signup /></LazyPage></PublicOnlyRoute>} />
             <Route path="onboarding" element={<ProtectedRoute><LazyPage><Onboarding /></LazyPage></ProtectedRoute>} />
             <Route element={<AppLayout />}>
-              <Route index element={<ProtectedRoute><LazyPage><Home /></LazyPage></ProtectedRoute>} />
+              <Route index element={<LazyPage><Home /></LazyPage>} />
               <Route path="home" element={<ProtectedRoute><LazyPage><Home /></LazyPage></ProtectedRoute>} />
               <Route path="explore" element={<LazyPage><Explore /></LazyPage>} />
               <Route path="resources/:slug/read" element={<LazyPage><PdfReader /></LazyPage>} />

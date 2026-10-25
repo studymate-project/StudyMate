@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test --test-isolation=none src/api/authRefresh.test.js src/api/notifications.test.js src/api/videos.test.js",
+    "test": "node --test --test-isolation=none src/api/authRefresh.test.js src/api/notifications.test.js src/api/resources.test.js src/api/videos.test.js src/auth/navigation.test.js src/components/community/questionDescriptionState.test.js src/components/profile/profileResourceActions.test.js src/pages/askQuestionPayload.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

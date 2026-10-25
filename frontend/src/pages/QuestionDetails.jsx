@@ -1,9 +1,12 @@
 import { ThumbsUp, UserRound } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { createAnswer, getApiErrorMessage, getQuestionBySlug, listAnswers, removeAnswerUpvote, upvoteAnswer } from '../api'
+import { getLoginState } from '../auth/navigation'
+import { useAuth } from '../auth/useAuth'
 import Button from '../components/common/Button'
 import Spinner from '../components/common/Spinner'
+import QuestionDescription from '../components/community/QuestionDescription'
 
 const initialState = {
   question: null,
@@ -22,6 +25,9 @@ function QuestionMessage({ title, message, showBackLink = true, loadingLabel = '
 
 function QuestionDetailsView({ slug }) {
   const queryKey = slug || ''
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { status: authStatus } = useAuth()
   const [state, setState] = useState(initialState)
   const [answers, setAnswers] = useState([])
   const [answerCount, setAnswerCount] = useState(0)
@@ -67,6 +73,10 @@ function QuestionDetailsView({ slug }) {
   const postAnswer = async () => {
     const body = draft.trim()
     if (!body || posting) return
+    if (authStatus !== 'authenticated') {
+      navigate('/login', { state: getLoginState(location) })
+      return
+    }
 
     setPosting(true)
     setActionError(null)
@@ -84,6 +94,10 @@ function QuestionDetailsView({ slug }) {
   }
 
   const toggleAnswerUpvote = async (answer) => {
+    if (authStatus !== 'authenticated') {
+      navigate('/login', { state: getLoginState(location) })
+      return
+    }
     const current = answerVoteState[answer.id] || { upvoted: null, pending: false }
     if (current.pending) return
 
@@ -130,7 +144,7 @@ function QuestionDetailsView({ slug }) {
               <span>- {displayedQuestionUpvotes} Upvotes</span>
               <span>- {answerCount} Answers</span>
             </div>
-            <p className="mt-5 text-base font-black leading-relaxed text-white/90">{question.body}</p>
+            <QuestionDescription description={question.body} className="relative mt-5 [&>p]:text-base [&>p]:text-white/90" />
           </section>
 
           {actionError ? <p className="border border-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_12%,var(--color-surface))] p-3 text-sm font-black text-[var(--color-danger)]">{actionError}</p> : null}

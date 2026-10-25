@@ -64,7 +64,13 @@ export function normalizeApiError(error) {
     request: error.request,
     config: error.config,
   })
-  if (import.meta.env.DEV) console.error('[StudyMate API]', error)
+  if (import.meta.env.DEV) {
+    console.error('[StudyMate API]', {
+      status: error.response?.status,
+      code: error.code,
+      message: normalizedError.message,
+    })
+  }
   return normalizedError
 }
 

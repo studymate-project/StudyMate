@@ -27,6 +27,22 @@ const csrfBootstrapClient = axios.create({
 
 let csrfBootstrapRequest
 let csrfToken
+let authFailureHandler
+
+export function setAuthFailureHandler(handler) {
+  authFailureHandler = handler
+  return () => {
+    if (authFailureHandler === handler) authFailureHandler = undefined
+  }
+}
+
+function notifyAuthFailure() {
+  try {
+    authFailureHandler?.()
+  } catch {
+    // Session invalidation must not change the original API error.
+  }
+}
 
 async function ensureCsrfCookie({ force = false } = {}) {
   if (force) csrfToken = undefined
@@ -128,11 +144,16 @@ apiClient.interceptors.response.use(
       }
     }
 
+    if (error.response?.status === 401 && error.config?._authRetry && !isRefreshEndpoint(error.config)) {
+      notifyAuthFailure()
+    }
+
     if (error.response?.status === 401 && canRefreshRequest(error.config)) {
       try {
         await refreshAccessCookie()
         return apiClient({ ...error.config, _authRetry: true })
-      } catch {
+      } catch (refreshError) {
+        if (refreshError?.status === 401) notifyAuthFailure()
         // Return the original 401 so the caller can show the correct auth state.
       }
     }

@@ -37,7 +37,7 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.status import HTTP_200_OK, HTTP_201_CREATED
 from rest_framework.generics import ListAPIView
-from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
+from rest_framework.mixins import CreateModelMixin, DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
@@ -960,7 +960,7 @@ class SavedResourceListView(ListAPIView):
         responses={201: VideoSerializer, 400: BAD_REQUEST, 401: UNAUTHENTICATED},
     ),
 )
-class VideoViewSet(ListModelMixin, RetrieveModelMixin, CreateModelMixin, GenericViewSet):
+class VideoViewSet(DestroyModelMixin, ListModelMixin, RetrieveModelMixin, CreateModelMixin, GenericViewSet):
     serializer_class = VideoSerializer
     permission_classes = (IsVideoOwnerOrReadOnly,)
     lookup_field = "slug"
@@ -1001,7 +1001,9 @@ class VideoViewSet(ListModelMixin, RetrieveModelMixin, CreateModelMixin, Generic
     def get_permissions(self):
         if self.action in {"list", "retrieve"}:
             return [AllowAny()]
-        if self.action not in {"create"}:
+        if self.action == "destroy":
+            return [IsAuthenticated(), IsVideoOwnerOrReadOnly()]
+        if self.action != "create":
             return [AllowAny()]
         return [IsAuthenticated(), IsVideoOwnerOrReadOnly()]
 

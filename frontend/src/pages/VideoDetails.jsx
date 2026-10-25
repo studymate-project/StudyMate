@@ -1,8 +1,9 @@
 import { Bookmark, Eye, Share2, ThumbsUp, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getApiErrorMessage } from '../api'
 import { deleteVideoRating, getVideoBySlug, saveVideoRating } from '../api/videos'
+import { getLoginState } from '../auth/navigation'
 import { useAuth } from '../auth/useAuth'
 import Button from '../components/common/Button'
 import DiscussionPanel from '../components/common/DiscussionPanel'
@@ -54,6 +55,8 @@ function ExpandableDescription({ description }) {
 
 function VideoDetailsView({ slug }) {
   const queryKey = slug || ''
+  const location = useLocation()
+  const navigate = useNavigate()
   const { status: authStatus } = useAuth()
   const [state, setState] = useState(initialState)
   const [upvoted, setUpvoted] = useState(false)
@@ -62,6 +65,12 @@ function VideoDetailsView({ slug }) {
   const [ratingState, setRatingState] = useState('idle')
   const [ratingError, setRatingError] = useState('')
   const [ratingNotice, setRatingNotice] = useState('')
+
+  const requireAuth = () => {
+    if (authStatus === 'authenticated') return true
+    navigate('/login', { state: getLoginState(location) })
+    return false
+  }
 
   useEffect(() => {
     let isCurrent = true
@@ -163,7 +172,7 @@ function VideoDetailsView({ slug }) {
               <IconButton
                 label={upvoted ? 'Remove upvote from video' : 'Upvote video'}
                 variant="default"
-                onClick={() => setUpvoted((value) => !value)}
+                onClick={() => { if (requireAuth()) setUpvoted((value) => !value) }}
                 aria-pressed={upvoted}
                 className={`h-11 w-11 rounded-full border-0 bg-transparent p-0 hover:border-transparent hover:bg-transparent ${upvoted ? 'text-[var(--color-primary-light)]' : ''}`}
               >
@@ -172,7 +181,7 @@ function VideoDetailsView({ slug }) {
               <IconButton
                 label={saved ? 'Remove video from saved items' : 'Save video'}
                 variant="default"
-                onClick={() => setSaved((value) => !value)}
+                onClick={() => { if (requireAuth()) setSaved((value) => !value) }}
                 aria-pressed={saved}
                 className={`h-11 w-11 rounded-full border-0 bg-transparent p-0 hover:border-transparent hover:bg-transparent ${saved ? 'text-[var(--color-primary-light)]' : ''}`}
               >

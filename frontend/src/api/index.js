@@ -6,8 +6,11 @@ export { ACADEMIC_STAGE_TYPES, clearEducationCatalogCache, listAcademicLevels, l
 export {
   createResource,
   clearResourceListCache,
+  deleteResource,
   getResourceBySlug,
   listResources,
+  listAllResources,
+  listAllSavedResources,
   listSavedResources,
   normalizeResource,
   deleteResourceRating,
@@ -17,7 +20,7 @@ export {
   trackResourceView,
   unsaveResource,
 } from './resources'
-export { clearVideoListCache, createVideo, deleteVideoRating, getVideoBySlug, listVideos, normalizeVideo, saveVideoRating } from './videos'
+export { clearVideoListCache, createVideo, deleteVideo, deleteVideoRating, getVideoBySlug, listAllVideos, listVideos, normalizeVideo, saveVideoRating } from './videos'
 export { normalizeSearchQuery, searchContent, SEARCH_MAX_QUERY_LENGTH, SEARCH_PAGE_SIZE } from './search'
 export {
   createResourceDiscussionComment,
@@ -28,6 +31,7 @@ export {
   unlikeDiscussionComment,
 } from './discussions'
 export {
+  clearCurrentProfileCache,
   followProfile,
   getCurrentProfile,
   getPublicProfile,

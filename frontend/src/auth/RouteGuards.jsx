@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { getApiErrorMessage } from '../api/errors'
 import Spinner from '../components/common/Spinner'
+import { getLoginState } from './navigation'
 import { useAuth } from './useAuth'
 
 function AuthLoading() {
@@ -34,7 +35,7 @@ export function ProtectedRoute({ children }) {
   if (status === 'loading') return <AuthLoading />
   if (status === 'error') return <AuthError error={error} onRetry={retryInitialization} />
   if (status === 'unauthenticated') {
-    return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
+    return <Navigate to="/login" replace state={getLoginState(location)} />
   }
   if (!user?.profile?.onboarding_completed && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace state={{ from: `${location.pathname}${location.search}` }} />

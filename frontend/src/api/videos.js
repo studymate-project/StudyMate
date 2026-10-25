@@ -64,6 +64,7 @@ export function normalizeVideo(video) {
 
   return {
     id: video.id,
+    targetType: 'video',
     slug: video.slug,
     title: video.title,
     description: video.description,
@@ -75,6 +76,7 @@ export function normalizeVideo(video) {
     difficulty: choiceLabels[video.difficulty] || video.difficulty || null,
     tags: Array.isArray(video.tags) ? video.tags.map((tag) => tag.name).filter(Boolean) : [],
     author: normalizeUploader(video.uploader),
+    createdAt: video.created_at || null,
     uploadedAt: formatDate(video.created_at),
     youtubeVideoId,
     originalUrl: video.original_url || null,
@@ -86,6 +88,16 @@ export function normalizeVideo(video) {
     views: video.views ?? null,
     upvotes: video.upvotes ?? null,
   }
+}
+
+export function deleteVideo(videoSlug) {
+  const normalizedSlug = videoSlug?.trim()
+  if (!normalizedSlug) return Promise.reject(new Error('A video slug is required.'))
+
+  return apiClient.delete(`/videos/${encodeURIComponent(normalizedSlug)}/`).then((response) => {
+    clearVideoListCache()
+    return response.data
+  })
 }
 
 export function createVideo(payload) {
@@ -125,6 +137,22 @@ export function listVideos(params = {}) {
     () => { if (inFlightRequests.get(requestKey) === request) inFlightRequests.delete(requestKey) },
   )
   return request
+}
+
+export async function listAllVideos(params = {}) {
+  const videos = []
+  let page = 1
+  let pagination
+
+  while (true) {
+    const result = await listVideos({ ...params, page, page_size: 100 })
+    videos.push(...result.videos)
+    pagination = result.pagination
+    if (!pagination.next) break
+    page += 1
+  }
+
+  return { videos, pagination: { ...pagination, count: pagination.count || videos.length, next: null, previous: null } }
 }
 
 export function clearVideoListCache() {

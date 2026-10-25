@@ -1,4 +1,4 @@
-import { apiClient } from './client'
+import { apiClient } from './client.js'
 
 const resourceTypeLabels = {
   file: 'File',
@@ -48,8 +48,8 @@ const inFlightRequests = new Map()
 const resourceListCache = new Map()
 const RESOURCE_LIST_CACHE_TTL_MS = 30 * 1000
 let resourceCacheGeneration = 0
-let savedResourcesRequest
-let savedResourcesCache
+const savedResourcesRequests = new Map()
+const savedResourcesCache = new Map()
 let savedResourcesGeneration = 0
 
 function formatDate(value) {
@@ -87,6 +87,7 @@ export function normalizeResource(resource) {
 
   return {
     id: resource.id,
+    targetType: 'resource',
     slug: resource.slug,
     title: resource.title,
     type: resourceTypeLabels[resource.resource_type] || resource.resource_type,
@@ -107,6 +108,7 @@ export function normalizeResource(resource) {
     upvotes: resource.upvotes ?? null,
     isSaved: Boolean(resource.is_saved),
     difficulty: choiceLabels[resource.difficulty] || resource.difficulty || null,
+    createdAt: resource.created_at || null,
     uploadedAt: formatDate(resource.created_at),
     description: resource.description,
     resourceUrl: resource.file || resource.external_url || null,
@@ -179,9 +181,9 @@ export function clearResourceListCache() {
   resourceListCache.clear()
   inFlightRequests.clear()
   resourceCacheGeneration += 1
-  savedResourcesCache = undefined
+  savedResourcesCache.clear()
   savedResourcesGeneration += 1
-  savedResourcesRequest = undefined
+  savedResourcesRequests.clear()
 }
 
 export function createResource(formData, uploadId) {
@@ -196,26 +198,54 @@ export function createResource(formData, uploadId) {
     })
 }
 
-export function listSavedResources() {
-  if (savedResourcesCache) return Promise.resolve(savedResourcesCache)
-  if (savedResourcesRequest) return savedResourcesRequest
+export function listSavedResources(params = {}) {
+  const query = normalizeParams(params)
+  const requestKey = JSON.stringify(query)
+  const cached = savedResourcesCache.get(requestKey)
+  if (cached) return Promise.resolve(cached)
+  const existingRequest = savedResourcesRequests.get(requestKey)
+  if (existingRequest) return existingRequest
 
   const requestGeneration = savedResourcesGeneration
   const request = apiClient
-    .get('/saved-resources/')
+    .get('/saved-resources/', { params: query })
     .then((response) => {
       const data = normalizeResponse(response.data)
-      if (requestGeneration === savedResourcesGeneration) savedResourcesCache = data
+      if (requestGeneration === savedResourcesGeneration) savedResourcesCache.set(requestKey, data)
       return data
     })
 
-  savedResourcesRequest = request
+  savedResourcesRequests.set(requestKey, request)
   request.then(
-    () => { if (savedResourcesRequest === request) savedResourcesRequest = undefined },
-    () => { if (savedResourcesRequest === request) savedResourcesRequest = undefined },
+    () => { if (savedResourcesRequests.get(requestKey) === request) savedResourcesRequests.delete(requestKey) },
+    () => { if (savedResourcesRequests.get(requestKey) === request) savedResourcesRequests.delete(requestKey) },
   )
 
-  return savedResourcesRequest
+  return request
+}
+
+async function listAllPages(listPage, params = {}) {
+  const resources = []
+  let page = 1
+  let pagination
+
+  while (true) {
+    const result = await listPage({ ...params, page, page_size: 100 })
+    resources.push(...result.resources)
+    pagination = result.pagination
+    if (!pagination.next) break
+    page += 1
+  }
+
+  return { resources, pagination: { ...pagination, count: pagination.count || resources.length, next: null, previous: null } }
+}
+
+export function listAllResources(params = {}) {
+  return listAllPages(listResources, params)
+}
+
+export function listAllSavedResources(params = {}) {
+  return listAllPages(listSavedResources, params)
 }
 
 export function saveResource(resourceId) {
@@ -227,6 +257,13 @@ export function saveResource(resourceId) {
 
 export function unsaveResource(resourceId) {
   return apiClient.delete(`/resources/${resourceId}/save/`).then((response) => {
+    clearResourceListCache()
+    return response.data
+  })
+}
+
+export function deleteResource(resourceId) {
+  return apiClient.delete(`/resources/${resourceId}/`).then((response) => {
     clearResourceListCache()
     return response.data
   })

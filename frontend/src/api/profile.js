@@ -1,12 +1,17 @@
 import { getCurrentUser } from './auth'
 import { apiClient } from './client'
 import { listAcademicLevels, listCourses, listEducationBackgrounds } from './onboarding'
-import { listResources, listSavedResources } from './resources'
+import { listAllResources, listAllSavedResources } from './resources'
+import { listAllVideos } from './videos'
 import { listAnswersByAuthor, listQuestions } from './questions'
 
 let currentProfileRequest
 const currentProfileCache = new Map()
 const CURRENT_PROFILE_CACHE_TTL_MS = 30 * 1000
+
+export function clearCurrentProfileCache() {
+  currentProfileCache.clear()
+}
 
 function getDisplayName(user, profile) {
   return profile.display_name?.trim()
@@ -40,6 +45,29 @@ function normalizeStats(contributionPoints, activity) {
 
 function sameId(first, second) {
   return String(first) === String(second)
+}
+
+function normalizeProfileVideo(video) {
+  return {
+    id: video.id,
+    targetType: 'video',
+    slug: video.slug,
+    title: video.title,
+    type: 'Video',
+    resourceType: 'video',
+    subject: video.subject,
+    topic: video.topic,
+    course: video.course || '',
+    semester: video.semester || '',
+    description: video.description || '',
+    authorId: video.author?.id,
+    author: video.author,
+    createdAt: video.createdAt,
+    uploadedAt: video.uploadedAt,
+    resourceUrl: video.originalUrl || (video.youtubeVideoId ? `https://www.youtube.com/watch?v=${video.youtubeVideoId}` : null),
+    thumbnailUrl: video.thumbnailUrl,
+    durationSeconds: video.durationSeconds,
+  }
 }
 
 async function getEducationSelection(profile = {}) {
@@ -139,13 +167,16 @@ export async function getCurrentProfile(userOverride = null) {
   if (currentProfileRequest) return currentProfileRequest
 
   currentProfileRequest = Promise.resolve(userOverride || getCurrentUser()).then(async (user) => {
-    const [education, resourceResult, questionResult, savedResult] = await Promise.all([
+    const [education, resourceResult, videoResult, questionResult, savedResult] = await Promise.all([
       getEducationSelection(user.profile),
-      listResources({ uploader: user.id, page_size: 20 }),
+      listAllResources({ uploader: user.id }),
+      listAllVideos({ uploader: user.id }),
       listQuestions({ author: user.id, page_size: 20 }),
-      listSavedResources(),
+      listAllSavedResources(),
     ])
     const resources = resourceResult.resources.filter((resource) => resource.authorId === user.id)
+      .concat(videoResult.videos.filter((video) => video.author?.id === user.id).map(normalizeProfileVideo))
+      .sort((first, second) => new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime())
     const questions = questionResult.questions.filter((question) => question.author?.id === user.id)
     const { answers } = await listAnswersByAuthor()
 

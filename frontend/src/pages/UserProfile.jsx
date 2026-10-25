@@ -1,7 +1,8 @@
 import { BookOpen, MessageSquare, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { followProfile, getApiErrorMessage, getPublicProfile, listQuestions, listResources, unfollowProfile } from '../api'
+import { getLoginState } from '../auth/navigation'
 import Button from '../components/common/Button'
 import Spinner from '../components/common/Spinner'
 import { useAuth } from '../auth/useAuth'
@@ -10,6 +11,7 @@ const initialState = { status: 'loading', queryKey: null, user: null, profile: n
 
 function UserProfile() {
   const { username } = useParams()
+  const location = useLocation()
   const { status: authStatus, user: currentUser } = useAuth()
   const [state, setState] = useState(initialState)
   const [followStatus, setFollowStatus] = useState('idle')
@@ -85,6 +87,7 @@ function UserProfile() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h1 className="text-4xl font-black text-white">{user.name}</h1>
               {canFollow ? <Button type="button" variant="secondary" disabled={followStatus === 'loading'} onClick={handleFollow}>{followStatus === 'loading' ? 'Saving...' : profile.isFollowing ? 'Following' : 'Follow'}</Button> : null}
+              {authStatus !== 'authenticated' && currentUser?.username?.toLowerCase() !== user.username?.toLowerCase() ? <Link to="/login" state={getLoginState(location)} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 text-base font-black text-[var(--color-text)]">Sign in to follow</Link> : null}
             </div>
             <p className="mt-2 font-black text-[var(--color-text)]">@{user.username}{profile.college ? ` - ${profile.college}` : ''}</p>
             {profile.bio ? <p className="mt-3 max-w-2xl text-sm font-bold text-[var(--color-text)]">{profile.bio}</p> : null}

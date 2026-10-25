@@ -1,7 +1,8 @@
 import { MessageSquare, Send, UserRound } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { getApiErrorMessage } from '../../api'
+import { getLoginState } from '../../auth/navigation'
 import {
   createResourceDiscussionComment,
   createVideoDiscussionComment,
@@ -76,6 +77,8 @@ function DiscussionMessage({ comment, onLike, onReply, pendingLikeId, isAuthenti
 }
 
 function DiscussionPanel({ itemLabel = 'this item', targetType, targetId, targetSlug, authStatus }) {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
   const [comments, setComments] = useState([])
   const [loadState, setLoadState] = useState({ status: 'idle', error: null })
@@ -84,7 +87,6 @@ function DiscussionPanel({ itemLabel = 'this item', targetType, targetId, target
   const [replyDraft, setReplyDraft] = useState('')
   const [submissionState, setSubmissionState] = useState({ status: 'idle', error: '' })
   const [pendingLikeId, setPendingLikeId] = useState(null)
-  const [authNotice, setAuthNotice] = useState('')
   const composerRef = useRef(null)
   const target = targetType === 'resource' ? targetId : targetSlug
   const isAuthenticated = authStatus === 'authenticated'
@@ -116,11 +118,10 @@ function DiscussionPanel({ itemLabel = 'this item', targetType, targetId, target
   }, [isOpen, replyTargetId])
 
   const requireAuth = () => {
-    setAuthNotice('Please sign in to like, reply, or post in this discussion.')
+    navigate('/login', { state: getLoginState(location) })
   }
 
   const handleLike = async (comment) => {
-    setAuthNotice('')
     setPendingLikeId(comment.id)
     try {
       const result = comment.liked
@@ -139,7 +140,6 @@ function DiscussionPanel({ itemLabel = 'this item', targetType, targetId, target
   }
 
   const handleReply = (commentId) => {
-    setAuthNotice('')
     setReplyTargetId(commentId)
   }
 
@@ -288,7 +288,6 @@ function DiscussionPanel({ itemLabel = 'this item', targetType, targetId, target
           </div>
 
           <div className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 pb-2 pt-3 sm:px-3">
-            {authNotice ? <p className="mb-2 px-1 text-sm font-medium text-[var(--color-primary-light)]" role="status">{authNotice} <Link className="underline underline-offset-4" to="/login">Sign in</Link></p> : null}
             {submissionState.status === 'error' ? <p className="mb-2 px-1 text-sm font-medium text-[var(--color-danger)]" role="alert">{submissionState.error}</p> : null}
             {submissionState.status === 'success' ? <p className="mb-2 px-1 text-sm font-medium text-[var(--color-success)]" role="status">Your message was posted.</p> : null}
             {isAuthenticated ? (
@@ -313,7 +312,7 @@ function DiscussionPanel({ itemLabel = 'this item', targetType, targetId, target
                 </div>
               </form>
             ) : (
-              <p className="px-1 text-sm font-medium text-[var(--color-text)]">Sign in to join the discussion. <Link className="text-[var(--color-primary-light)] underline underline-offset-4" to="/login">Sign in</Link></p>
+              <p className="px-1 text-sm font-medium text-[var(--color-text)]">Sign in to join the discussion. <Link className="text-[var(--color-primary-light)] underline underline-offset-4" state={getLoginState(location)} to="/login">Sign in</Link></p>
             )}
           </div>
         </div>
