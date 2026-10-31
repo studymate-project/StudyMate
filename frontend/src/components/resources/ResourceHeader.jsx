@@ -79,9 +79,9 @@ function ResourceHeader({ resource, author, onDownloadCountChange, descriptionCo
   }
 
   return (
-    <section className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-7">
+    <section className="p-5 sm:p-7">
       <div className="grid gap-5 sm:grid-cols-[78px_minmax(0,1fr)]">
-        <div className="flex h-[78px] w-[78px] items-center justify-center rounded-lg bg-[var(--color-surface-muted)] text-[var(--color-primary-light)]">
+        <div className="flex h-[78px] w-[78px] items-center justify-center rounded-lg text-[var(--color-primary-light)]">
           <FileText size={36} />
         </div>
         <div className="min-w-0">

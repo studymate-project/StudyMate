@@ -209,8 +209,7 @@ function DiscussionPanel({ itemLabel = 'this item', targetType, targetId, target
     <section className="min-w-0 overflow-hidden py-5" aria-labelledby="discussion-heading">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 id="discussion-heading" className="text-base font-semibold text-white">Discussion</h2>
-          {!isOpen ? <p className="mt-1 text-sm font-medium text-[var(--color-text)]">Ask questions and share helpful explanations about {itemLabel}.</p> : null}
+          <h2 id="discussion-heading" className="text-base font-semibold text-white">Discussion</h2>          
         </div>
         <button
           type="button"
@@ -225,8 +224,8 @@ function DiscussionPanel({ itemLabel = 'this item', targetType, targetId, target
       </div>
 
       {isOpen ? (
-        <div id="discussion-chat" className="mt-4 flex max-h-[min(36rem,70vh)] min-h-[18rem] flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[var(--color-surface)] px-1 py-3 sm:px-2" aria-live="polite">
+        <div id="discussion-chat" className="mt-4 flex max-h-[min(36rem,70vh)] min-h-[18rem] flex-col overflow-hidden rounded-2xl ">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain  px-1 py-3 sm:px-2" aria-live="polite">
             {loadState.status === 'loading' ? (
               <div className="flex justify-center py-10"><Spinner label="Loading discussion" /></div>
             ) : loadState.status === 'error' ? (
@@ -283,11 +282,11 @@ function DiscussionPanel({ itemLabel = 'this item', targetType, targetId, target
                 ))}
               </div>
             ) : (
-              <p className="px-2 py-8 text-center text-sm font-medium text-[var(--color-text)]">No messages yet. Start the conversation.</p>
+              <p className="px-2 py-8 text-center text-sm font-medium text-[var(--color-text)]">No messages yet.</p>
             )}
           </div>
 
-          <div className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 pb-2 pt-3 sm:px-3">
+          <div className="shrink-0 border-t rounded-xl border-[var(--color-border)] bg-[var(--color-surface)] px-1 pb-1 pt-1 sm:px-3">
             {submissionState.status === 'error' ? <p className="mb-2 px-1 text-sm font-medium text-[var(--color-danger)]" role="alert">{submissionState.error}</p> : null}
             {submissionState.status === 'success' ? <p className="mb-2 px-1 text-sm font-medium text-[var(--color-success)]" role="status">Your message was posted.</p> : null}
             {isAuthenticated ? (

@@ -9,7 +9,7 @@ function UploaderCard({ user = {} }) {
   ].filter(Boolean).join(' - ')
 
   return (
-    <aside className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <aside className="p-5">
       <h2 className="text-base font-black text-white">About the Uploader</h2>
       <div className="mt-4 h-px bg-[var(--color-border-strong)]" />
       <div className="mt-5 flex items-center gap-4">

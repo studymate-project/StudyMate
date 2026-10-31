@@ -23,12 +23,12 @@ function RatingControl({
   }
 
   return (
-    <section className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5" aria-labelledby={`${itemLabel}-rating-title`}>
+    <section className="p-5" aria-labelledby={`${itemLabel}-rating-title`}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 id={`${itemLabel}-rating-title`} className="text-base font-black text-white">Rate this {itemLabel}</h2>
           <p className="mt-2 text-sm font-bold text-[var(--color-text)]">
-            {isAuthenticated ? 'Choose one to rate or update your rating.' : 'Sign in to rate this item.'}
+            {isAuthenticated ? 'Choose one to rate or update.' : 'Sign in to rate this item.'}
           </p>
         </div>
         <Rating
@@ -43,9 +43,9 @@ function RatingControl({
         />
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-4 text-sm font-bold">
+      <div className="mt-1 flex flex-wrap items-center gap-4 text-sm font-bold">
         <span className="text-[var(--color-text)]">
-          {selectedRating ? `Selected rating: ${selectedRating}/5` : 'No rating selected'}
+          {selectedRating ? `Selected rating: ${selectedRating}/5` : 'No rating'}
         </span>
         {isAuthenticated && value != null ? (
           <button
@@ -54,7 +54,7 @@ function RatingControl({
             disabled={isSaving}
             className="text-[var(--color-primary-light)] underline decoration-1 underline-offset-4 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSaving ? 'Saving...' : 'Remove my rating'}
+            {isSaving ? 'Saving...' : 'Remove rating'}
           </button>
         ) : !isAuthenticated ? (
           <Link to="/login" state={getLoginState(location)} className="text-[var(--color-primary-light)] underline decoration-1 underline-offset-4">

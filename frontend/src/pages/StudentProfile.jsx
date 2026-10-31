@@ -124,7 +124,7 @@ function ProfileDetails({ profile }) {
   ].filter(([, value]) => value)
 
   if (!details.length) return null
-  return <section className="grid gap-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:grid-cols-2 sm:p-6" aria-label="Education and location">
+  return <section className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6" aria-label="Education and location">
     {details.map(([label, value]) => <div key={label}><p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text)]">{label}</p><p className="mt-1 text-sm font-semibold text-white">{value}</p></div>)}
   </section>
 }

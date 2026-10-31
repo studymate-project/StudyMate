@@ -162,7 +162,7 @@ function VideoDetailsView({ slug }) {
           <YouTubePlayer videoId={video.youtubeVideoId} title={video.title} />
 
           <section className="mt-7 border-b-2 border-[var(--color-border-strong)] pb-5">
-            <h2 className="text-2xl font-black text-white">{video.title}</h2>
+            <h2 className="text-xl font-black text-white">{video.title}</h2>
             <div className="mt-4 flex flex-wrap items-center gap-5 text-sm font-black text-[var(--color-text)]">
               {stats.map(({ icon: Icon, value }) => <span key={value} className="inline-flex items-center gap-2"><Icon size={16} />{value}</span>)}
               <Rating value={video.rating} count={video.ratingCount} size={22} />
@@ -221,7 +221,7 @@ function VideoDetailsView({ slug }) {
         </main>
 
         <aside className="space-y-5">
-          <section className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+          <section className="p-5">
             <h2 className="text-sm font-black uppercase text-[var(--color-text)]">Uploaded By</h2>
             <div className="mt-4 flex items-center gap-4"><Avatar /><div>{video.author?.username ? <Link to={`/users/${video.author.username}`} className="font-black text-white">{video.author.name}</Link> : <p className="font-black text-white">{video.author?.name || 'StudyMate member'}</p>}<p className="text-sm font-black text-[var(--color-text)]">{video.uploadedAt || 'Date unavailable'}</p></div></div>
             {video.author?.username ? <Button to={`/users/${video.author.username}`} className="mt-5 w-full">View Profile</Button> : null}

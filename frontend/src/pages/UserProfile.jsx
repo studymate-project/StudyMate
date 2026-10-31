@@ -80,7 +80,7 @@ function UserProfile() {
 
   return (
     <div className="mx-auto w-full max-w-[1260px] px-5 py-8 sm:px-8 lg:px-10">
-      <section className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-6">
+      <section className="p-6">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
           <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-primary-dark)] text-[var(--color-primary-light)]"><UserRound size={40} /></span>
           <div className="min-w-0 flex-1">

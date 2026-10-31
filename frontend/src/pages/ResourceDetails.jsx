@@ -24,7 +24,7 @@ const initialState = {
 function ResourceMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
   return (
     <div className="mx-auto flex w-full max-w-[900px] justify-center px-5 py-20 text-center sm:px-8">
-      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Link className="mt-7 inline-flex min-h-11 items-center rounded-xl border border-[var(--color-primary)] bg-[var(--color-primary)] px-5 font-black text-white" to="/explore">Back to Explore</Link> : null}</div>}
+      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Link className="mt-7 inline-flex min-h-11 items-center rounded-xl px-5 font-black text-white" to="/explore">Back to Explore</Link> : null}</div>}
     </div>
   )
 }
@@ -66,7 +66,7 @@ function ExpandableDescription({ heading, description, stats = [] }) {
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
-          className="mt-2 text-sm font-black text-[var(--color-primary-light)] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
+          className="mt-1 text-sm font-black text-[var(--color-primary-light)] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
         >
           {expanded ? 'Less' : 'More'}
         </button>

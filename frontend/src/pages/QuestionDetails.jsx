@@ -132,19 +132,19 @@ function QuestionDetailsView({ slug }) {
 
       <div className="mt-5 grid gap-7 lg:grid-cols-[minmax(0,1fr)_310px]">
         <main className="min-w-0 space-y-5">
-          <section className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-7">
+          <section className="p-5 sm:p-7">
             <h1 className="text-2xl font-black leading-tight text-white sm:text-3xl">{question.title}</h1>
             <div className="mt-4 flex flex-wrap gap-2">
-              {question.tags.map((tag) => <span key={tag} className="rounded-lg bg-[var(--color-primary)] px-3 py-2 text-base font-black text-[var(--color-primary-dark)]">#{tag}</span>)}
+              {question.tags.map((tag) => <span key={tag} className="rounded-lg bg-[var(--color-primary)] px-3 py-2 text-base font-black text-[var(--color-primary-dark)]">{tag}</span>)}
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-4 text-sm font-black text-[var(--color-text)]">
               <Avatar />
               {question.author?.username ? <Link to={`/users/${question.author.username}`} className="text-white">{question.author.name}</Link> : <span className="text-white">{question.author?.name || 'StudyMate member'}</span>}
-              <span>- {question.createdAt || 'Date unavailable'}</span>
-              <span>- {displayedQuestionUpvotes} Upvotes</span>
-              <span>- {answerCount} Answers</span>
+              <span> {question.createdAt || 'Date unavailable'}</span>
+              <span> {displayedQuestionUpvotes} Upvotes</span>
+              <span> {answerCount} Answers</span>
             </div>
-            <QuestionDescription description={question.body} className="relative mt-5 [&>p]:text-base [&>p]:text-white/90" />
+            <QuestionDescription description={question.body} className="relative mt-5 [&>p]:text-sm [&>p]:text-white/80" />
           </section>
 
           {actionError ? <p className="border border-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_12%,var(--color-surface))] p-3 text-sm font-black text-[var(--color-danger)]">{actionError}</p> : null}
@@ -152,11 +152,11 @@ function QuestionDetailsView({ slug }) {
           <h2 className="text-xl font-black text-white">{answerCount} Answers</h2>
           {answers.length
             ? answers.map((answer) => <AnswerCard key={answer.id} answer={answer} voteState={answerVoteState[answer.id]} onToggleVote={toggleAnswerUpvote} />)
-            : <p className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-sm font-black text-[var(--color-text)]">{answerCount ? 'No answers were returned for this question.' : 'No answers yet.'}</p>}
+            : <p className="p-1 text-sm font-black text-[var(--color-text)]">{answerCount ? 'No answers were returned for this question.' : 'No answers yet.'}</p>}
 
-          <section className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+          <section className="p-3">
             <h2 className="font-black text-white">Write an Answer</h2>
-            <textarea ref={answerRef} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Share your knowledge - be clear, concise, and helpful to other students." className="mt-4 min-h-28 w-full resize-y border-2 border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 font-bold text-white outline-none placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-primary-light)]" />
+            <textarea ref={answerRef} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Share your knowledge - be clear, concise, and helpful to other students." className="mt-3 min-h-28 w-full resize-y border-1 border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4  text-white outline-none placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-primary-light)]" />
             {preview && draft ? <div className="mt-3 border border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-sm font-bold text-white">{draft}</div> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button onClick={postAnswer} disabled={posting || !draft.trim()}>{posting ? 'Posting...' : 'Post Answer'}</Button>
@@ -183,7 +183,7 @@ function AnswerCard({ answer, voteState, onToggleVote }) {
   const upvoteLabel = answer.upvotes == null ? 'Upvote' : `${answer.upvotes} Upvotes`
 
   return (
-    <article className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6">
+    <article className=" p-5 sm:p-6">
       <div className="flex items-center gap-3">
         <Avatar />
         <div>
