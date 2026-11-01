@@ -4,7 +4,7 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import { followProfile, getApiErrorMessage, getPublicProfile, listQuestions, listResources, unfollowProfile } from '../api'
 import { getLoginState } from '../auth/navigation'
 import Button from '../components/common/Button'
-import Spinner from '../components/common/Spinner'
+import { PublicProfileSkeleton } from '../components/common/Skeletons'
 import { useAuth } from '../auth/useAuth'
 
 const initialState = { status: 'loading', queryKey: null, user: null, profile: null, resources: [], questions: [], error: null }
@@ -115,7 +115,8 @@ function UserProfile() {
 }
 
 function ProfileMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
-  return <div className="mx-auto flex max-w-[900px] justify-center px-5 py-20 text-center">{loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/community" className="mt-7">Back to Community</Button> : null}</div>}</div>
+  if (loadingLabel) return <PublicProfileSkeleton />
+  return <div className="mx-auto flex max-w-[900px] justify-center px-5 py-20 text-center"><div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/community" className="mt-7">Back to Community</Button> : null}</div></div>
 }
 
 function ProfileList({ title, empty, children }) {

@@ -1,6 +1,7 @@
 from django.db.models import Q
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from .models import AcademicLevel, Course, EducationBackground, Interest, StudentInterest
@@ -12,6 +13,8 @@ from .serializers import (
     StudentInterestSerializer,
 )
 from apps.core.schema import NOT_FOUND
+
+from .cache import catalog_cache_key, get_cached_catalog_response, set_cached_catalog_response
 
 
 MAX_CATALOG_PK = 2**63 - 1
@@ -36,6 +39,33 @@ def _resolve_catalog_id(model, value: str, *, active_filters: dict[str, object])
     return matches[0] if len(matches) == 1 else None
 
 
+class EducationCatalogCacheMixin:
+    """Cache public list/detail payloads while preserving DRF responses."""
+
+    catalog_cache_name = "catalog"
+
+    def list(self, request, *args, **kwargs):
+        cache_key = catalog_cache_key(self.catalog_cache_name, "list", request)
+        cached = get_cached_catalog_response(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        response = super().list(request, *args, **kwargs)
+        set_cached_catalog_response(cache_key, response.data)
+        return response
+
+    def retrieve(self, request, *args, **kwargs):
+        lookup = str(kwargs.get(self.lookup_url_kwarg or self.lookup_field, ""))
+        cache_key = catalog_cache_key(self.catalog_cache_name, "detail", request, lookup)
+        cached = get_cached_catalog_response(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        response = super().retrieve(request, *args, **kwargs)
+        set_cached_catalog_response(cache_key, response.data)
+        return response
+
+
 @extend_schema_view(
     list=extend_schema(
         summary="List education backgrounds",
@@ -46,7 +76,8 @@ def _resolve_catalog_id(model, value: str, *, active_filters: dict[str, object])
         responses={200: EducationBackgroundSerializer, 404: NOT_FOUND},
     ),
 )
-class EducationBackgroundViewSet(ReadOnlyModelViewSet):
+class EducationBackgroundViewSet(EducationCatalogCacheMixin, ReadOnlyModelViewSet):
+    catalog_cache_name = "backgrounds"
     queryset = EducationBackground.objects.filter(is_active=True)
     serializer_class = EducationBackgroundSerializer
     permission_classes = (AllowAny,)
@@ -71,7 +102,8 @@ class EducationBackgroundViewSet(ReadOnlyModelViewSet):
         responses={200: CourseSerializer, 404: NOT_FOUND},
     ),
 )
-class CourseViewSet(ReadOnlyModelViewSet):
+class CourseViewSet(EducationCatalogCacheMixin, ReadOnlyModelViewSet):
+    catalog_cache_name = "courses"
     serializer_class = CourseSerializer
     permission_classes = (AllowAny,)
 
@@ -118,7 +150,8 @@ class CourseViewSet(ReadOnlyModelViewSet):
         responses={200: AcademicLevelSerializer, 404: NOT_FOUND},
     ),
 )
-class AcademicLevelViewSet(ReadOnlyModelViewSet):
+class AcademicLevelViewSet(EducationCatalogCacheMixin, ReadOnlyModelViewSet):
+    catalog_cache_name = "academic-levels"
     serializer_class = AcademicLevelSerializer
     permission_classes = (AllowAny,)
 
@@ -175,7 +208,8 @@ class AcademicLevelViewSet(ReadOnlyModelViewSet):
         responses={200: InterestSerializer, 404: NOT_FOUND},
     ),
 )
-class InterestViewSet(ReadOnlyModelViewSet):
+class InterestViewSet(EducationCatalogCacheMixin, ReadOnlyModelViewSet):
+    catalog_cache_name = "interests"
     serializer_class = InterestSerializer
     permission_classes = (AllowAny,)
 

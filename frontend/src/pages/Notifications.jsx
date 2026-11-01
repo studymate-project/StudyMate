@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getApiErrorMessage, listNotifications, markAllNotificationsRead, markNotificationRead, matchesNotificationTab } from '../api'
 import Badge from '../components/common/Badge'
 import Button from '../components/common/Button'
-import Spinner from '../components/common/Spinner'
+import { NotificationSkeleton } from '../components/common/Skeletons'
 import Toast from '../components/common/Toast'
 import Footer from '../components/layout/Footer'
 import NotificationGroup from '../components/notifications/NotificationGroup'
@@ -108,7 +108,8 @@ function ComingSoonNotificationFeature() {
 }
 
 function NotificationsPageState({ title, message, action = null, loadingLabel = '' }) {
-  return <><main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[1260px] items-center justify-center px-5 py-12 sm:px-8 lg:px-10"><section className="flex w-full max-w-xl items-center justify-center border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-7 text-center">{loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-xl font-semibold text-white">{title}</h1><p className="mt-2 text-sm text-[var(--color-text)]">{message}</p>{action}</div>}</section></main><Footer /></>
+  if (loadingLabel) return <><NotificationSkeleton /><Footer /></>
+  return <><main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[1260px] items-center justify-center px-5 py-12 sm:px-8 lg:px-10"><section className="flex w-full max-w-xl items-center justify-center border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-7 text-center"><div><h1 className="text-xl font-semibold text-white">{title}</h1><p className="mt-2 text-sm text-[var(--color-text)]">{message}</p>{action}</div></section></main><Footer /></>
 }
 
 export default Notifications

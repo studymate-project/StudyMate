@@ -11,7 +11,7 @@ import {
   listVideoDiscussion,
   unlikeDiscussionComment,
 } from '../../api/discussions'
-import Spinner from './Spinner'
+import { DiscussionSkeleton } from './Skeletons'
 
 function Avatar() {
   return (
@@ -206,7 +206,7 @@ function DiscussionPanel({ itemLabel = 'this item', targetType, targetId, target
   }
 
   return (
-    <section className="min-w-0 overflow-hidden py-5" aria-labelledby="discussion-heading">
+    <section className="min-w-0 overflow-hidden py-5" aria-labelledby="discussion-heading" aria-label={`Discussion for ${itemLabel}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id="discussion-heading" className="text-base font-semibold text-white">Discussion</h2>          
@@ -227,7 +227,7 @@ function DiscussionPanel({ itemLabel = 'this item', targetType, targetId, target
         <div id="discussion-chat" className="mt-4 flex max-h-[min(36rem,70vh)] min-h-[18rem] flex-col overflow-hidden rounded-2xl ">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain  px-1 py-3 sm:px-2" aria-live="polite">
             {loadState.status === 'loading' ? (
-              <div className="flex justify-center py-10"><Spinner label="Loading discussion" /></div>
+              <DiscussionSkeleton />
             ) : loadState.status === 'error' ? (
               <div className="px-2 py-8 text-center text-sm font-medium text-[var(--color-danger)]">
                 <p>{getApiErrorMessage(loadState.error)}</p>

@@ -4,13 +4,11 @@ import { listAcademicLevels, listCourses, listEducationBackgrounds } from './onb
 import { listAllResources, listAllSavedResources } from './resources'
 import { listAllVideos } from './videos'
 import { listAnswersByAuthor, listQuestions } from './questions'
-
-let currentProfileRequest
-const currentProfileCache = new Map()
-const CURRENT_PROFILE_CACHE_TTL_MS = 30 * 1000
+import { queryClient, QUERY_STALE_TIMES } from '../query/queryClient'
+import { profileKeys, subjectKeys } from '../query/queryKeys'
 
 export function clearCurrentProfileCache() {
-  currentProfileCache.clear()
+  queryClient.invalidateQueries({ queryKey: [...profileKeys.all, 'current'], refetchType: 'active' })
 }
 
 function getDisplayName(user, profile) {
@@ -70,7 +68,7 @@ function normalizeProfileVideo(video) {
   }
 }
 
-async function getEducationSelection(profile = {}) {
+export async function getEducationSelection(profile = {}) {
   if (!profile.education_background) {
     return { background: null, course: null, academicLevel: null }
   }
@@ -108,6 +106,8 @@ export function normalizeProfileResponse(data, activity = {}, education = {}) {
     answers: activity.answers || [],
     savedResources: activity.savedResources || [],
   }
+  const activityLoaded = activity.loaded !== false
+  const statsStatus = activity.statsStatus || (activityLoaded ? 'ready' : 'loading')
 
   return {
     user: {
@@ -142,7 +142,15 @@ export function normalizeProfileResponse(data, activity = {}, education = {}) {
       academicLevelValue: profile.academic_level_value || academicLevel?.name || '',
       tags: [],
       interests: profile.interests || [],
-      stats: normalizeStats(profile.contribution_points, normalizedActivity),
+      stats: activityLoaded
+        ? normalizeStats(profile.contribution_points, {
+          ...normalizedActivity,
+          resources: Array.from({ length: activity.resourceCount ?? normalizedActivity.resources.length }),
+          questions: Array.from({ length: activity.questionCount ?? normalizedActivity.questions.length }),
+          answers: Array.from({ length: activity.answerCount ?? normalizedActivity.answers.length }),
+        })
+        : [],
+      statsStatus,
       achievements: [],
       resources: normalizedActivity.resources,
       recentQuestions: normalizedActivity.questions.map((question) => ({
@@ -159,50 +167,45 @@ export function normalizeProfileResponse(data, activity = {}, education = {}) {
   }
 }
 
-export async function getCurrentProfile(userOverride = null) {
-  const knownUser = userOverride || null
-  const cacheKey = knownUser?.id ? String(knownUser.id) : null
-  const cached = cacheKey ? currentProfileCache.get(cacheKey) : null
-  if (cached && cached.expiresAt > Date.now()) return cached.data
-  if (currentProfileRequest) return currentProfileRequest
-
-  currentProfileRequest = Promise.resolve(userOverride || getCurrentUser()).then(async (user) => {
-    const [education, resourceResult, videoResult, questionResult, savedResult] = await Promise.all([
-      getEducationSelection(user.profile),
-      listAllResources({ uploader: user.id }),
-      listAllVideos({ uploader: user.id }),
-      listQuestions({ author: user.id, page_size: 20 }),
-      listAllSavedResources(),
-    ])
-    const resources = resourceResult.resources.filter((resource) => resource.authorId === user.id)
-      .concat(videoResult.videos.filter((video) => video.author?.id === user.id).map(normalizeProfileVideo))
-      .sort((first, second) => new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime())
-    const questions = questionResult.questions.filter((question) => question.author?.id === user.id)
-    const { answers } = await listAnswersByAuthor()
-
-    const data = normalizeProfileResponse(
-      { user },
-      { resources, questions, answers, savedResources: savedResult.resources },
-      education,
-    )
-    currentProfileCache.set(String(user.id), { data, expiresAt: Date.now() + CURRENT_PROFILE_CACHE_TTL_MS })
-    return data
+export function getCurrentProfile(userOverride = null) {
+  const cacheKey = userOverride?.id ? String(userOverride.id) : 'current'
+  return queryClient.fetchQuery({
+    queryKey: profileKeys.current(cacheKey),
+    queryFn: async () => {
+      const user = userOverride || await getCurrentUser()
+      const [education, resourceResult, videoResult, questionResult, savedResult, answerResult] = await Promise.all([
+        getEducationSelection(user.profile),
+        listAllResources({ uploader: user.id }),
+        listAllVideos({ uploader: user.id }),
+        listQuestions({ author: user.id, page_size: 20 }),
+        listAllSavedResources(),
+        listAnswersByAuthor(user.id),
+      ])
+      const resources = resourceResult.resources.filter((resource) => resource.authorId === user.id)
+        .concat(videoResult.videos.filter((video) => video.author?.id === user.id).map(normalizeProfileVideo))
+        .sort((first, second) => new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime())
+      const questions = questionResult.questions.filter((question) => question.author?.id === user.id)
+      return normalizeProfileResponse(
+        { user },
+        {
+          resources,
+          questions,
+          answers: answerResult.answers,
+          savedResources: savedResult.resources,
+          resourceCount: resources.length,
+          questionCount: questions.length,
+          answerCount: answerResult.count,
+        },
+        education,
+      )
+    },
+    staleTime: QUERY_STALE_TIMES.profile,
   })
-
-  currentProfileRequest.then(
-    () => { currentProfileRequest = undefined },
-    () => { currentProfileRequest = undefined },
-  )
-
-  return currentProfileRequest
 }
 
-export function getPublicProfile(username) {
-  const normalizedUsername = username?.trim()
-  if (!normalizedUsername) return Promise.reject(new Error('A username is required.'))
-
+export function fetchPublicProfile(username) {
   return apiClient
-    .get(`/users/${encodeURIComponent(normalizedUsername)}/`)
+    .get(`/users/${encodeURIComponent(username)}/`)
     .then(async (response) => {
       const data = response.data || {}
       // Public profile responses are returned as StudentProfile records. Keep
@@ -249,11 +252,24 @@ export function getPublicProfile(username) {
     })
 }
 
+export function getPublicProfile(username) {
+  const normalizedUsername = username?.trim()
+  if (!normalizedUsername) return Promise.reject(new Error('A username is required.'))
+
+  return queryClient.fetchQuery({
+    queryKey: profileKeys.public(normalizedUsername.toLowerCase()),
+    queryFn: () => fetchPublicProfile(normalizedUsername),
+    staleTime: QUERY_STALE_TIMES.profile,
+  })
+}
+
 export function updateProfile(username, payload) {
   return apiClient
     .patch(`/users/${encodeURIComponent(username)}/`, payload)
     .then((response) => {
-      currentProfileCache.clear()
+      clearCurrentProfileCache()
+      queryClient.invalidateQueries({ queryKey: subjectKeys.all })
+      queryClient.invalidateQueries({ queryKey: profileKeys.public(username.toLowerCase()) })
       return response.data
     })
 }
@@ -261,11 +277,17 @@ export function updateProfile(username, payload) {
 export function followProfile(username) {
   return apiClient
     .post(`/users/${encodeURIComponent(username)}/follow/`)
-    .then((response) => response.data)
+    .then((response) => {
+      queryClient.invalidateQueries({ queryKey: profileKeys.public(username.toLowerCase()) })
+      return response.data
+    })
 }
 
 export function unfollowProfile(username) {
   return apiClient
     .delete(`/users/${encodeURIComponent(username)}/follow/`)
-    .then((response) => response.data)
+    .then((response) => {
+      queryClient.invalidateQueries({ queryKey: profileKeys.public(username.toLowerCase()) })
+      return response.data
+    })
 }

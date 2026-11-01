@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import Badge from '../components/common/Badge'
 import Button from '../components/common/Button'
 import SearchSection from '../components/search/SearchSection'
-import Spinner from '../components/common/Spinner'
+import { SearchResultsSkeleton } from '../components/common/Skeletons'
 import { getApiErrorMessage } from '../api'
 import { normalizeSearchQuery, searchContent, SEARCH_PAGE_SIZE } from '../api/search'
 import { getSearchResultRoute } from '../utils/searchUtils'
@@ -223,7 +223,7 @@ function SearchResultContent({ query }) {
     }
   }
 
-  if (loading) return <div className="flex items-center justify-center gap-3 px-5 py-12 text-sm font-black text-[var(--color-text)]" role="status"><Spinner label="Searching" /> Searching StudyMate</div>
+  if (loading) return <SearchResultsSkeleton />
   if (error) {
     return (
       <div className="border-2 border-[var(--color-danger)] bg-[var(--color-surface)] px-5 py-8 text-center" role="alert">
@@ -263,7 +263,7 @@ function SearchResultContent({ query }) {
       {hasMore && (
         <div className="flex justify-center pt-3">
           <Button type="button" variant="secondary" onClick={loadMore} disabled={loadingMore}>
-            {loadingMore ? <><Spinner label="Loading more results" /> Loading more</> : 'Load more results'}
+            {loadingMore ? 'Loading more...' : 'Load more results'}
           </Button>
         </div>
       )}

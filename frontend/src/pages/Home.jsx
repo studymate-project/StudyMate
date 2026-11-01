@@ -10,7 +10,7 @@ function Home() {
       <HeroSection />
       <PopularSubjects />
       <TrendingResources />
-      <DiscussionSection />
+      <DiscussionSection deferUntilVisible />
       <HowStudyMateWorks />
     </>
   )

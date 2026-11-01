@@ -322,6 +322,23 @@ if SUBJECT_RECOMMENDATION_CACHE_VERSION_TTL_SECONDS < (
         'SUBJECT_RECOMMENDATION_CACHE_VERSION_TTL_SECONDS must be at least the maximum subject cache TTL.'
     )
 
+EDUCATION_CATALOG_CACHE_TTL_SECONDS = env.int(
+    'EDUCATION_CATALOG_CACHE_TTL_SECONDS',
+    default=3600,
+)
+EDUCATION_CATALOG_CACHE_VERSION_TTL_SECONDS = env.int(
+    'EDUCATION_CATALOG_CACHE_VERSION_TTL_SECONDS',
+    default=86400,
+)
+if not 300 <= EDUCATION_CATALOG_CACHE_TTL_SECONDS <= 86400:
+    raise ImproperlyConfigured(
+        'EDUCATION_CATALOG_CACHE_TTL_SECONDS must be between 300 and 86400 seconds.'
+    )
+if EDUCATION_CATALOG_CACHE_VERSION_TTL_SECONDS < EDUCATION_CATALOG_CACHE_TTL_SECONDS:
+    raise ImproperlyConfigured(
+        'EDUCATION_CATALOG_CACHE_VERSION_TTL_SECONDS must be at least the catalog cache TTL.'
+    )
+
 # Metrics are opt-in because each recorded cache event is an additional cache
 # write. The counters are namespace-scoped and retained briefly; they are not
 # a substitute for provider-level Redis memory or billing metrics.

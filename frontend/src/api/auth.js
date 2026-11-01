@@ -3,6 +3,7 @@ import { restoreSessionWithRefresh } from './authFlow'
 import { clearNotificationCache } from './notifications'
 import { clearQuestionListCache } from './questions'
 import { clearResourceListCache } from './resources'
+import { clearQueryCache } from '../query/queryClient'
 
 let sessionRestoreRequest
 let currentUserRequest
@@ -12,6 +13,7 @@ function getUser(data) {
 }
 
 export function clearClientAuthState() {
+  clearQueryCache()
   clearResourceListCache()
   clearQuestionListCache()
   clearNotificationCache()

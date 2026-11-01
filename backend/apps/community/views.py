@@ -1,6 +1,7 @@
 import logging
 
-from django.db.models import Count, Q
+from django.db.models import Count, IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers
@@ -108,6 +109,35 @@ def visible_answer_queryset(request, question_id):
     )
 
 
+def _question_count_annotations() -> dict[str, object]:
+    """Count independent reverse relations without multiplying their joins."""
+
+    upvote_count = (
+        QuestionUpvote.objects.filter(question_id=OuterRef("pk"))
+        .order_by()
+        .values("question_id")
+        .annotate(value=Count("pk"))
+        .values("value")[:1]
+    )
+    answer_count = (
+        Answer.objects.filter(question_id=OuterRef("pk"))
+        .order_by()
+        .values("question_id")
+        .annotate(value=Count("pk"))
+        .values("value")[:1]
+    )
+    return {
+        "upvotes_count": Coalesce(
+            Subquery(upvote_count, output_field=IntegerField()),
+            Value(0),
+        ),
+        "answers_count": Coalesce(
+            Subquery(answer_count, output_field=IntegerField()),
+            Value(0),
+        ),
+    }
+
+
 @extend_schema_view(
     list=extend_schema(
         summary="List questions",
@@ -157,9 +187,8 @@ class QuestionViewSet(
         return super().get_throttles()
 
     def get_queryset(self):
-        queryset = Question.objects.select_related("author", "academic_level").prefetch_related("tags").annotate(
-            upvotes_count=Count("upvotes", distinct=True),
-            answers_count=Count("answers", distinct=True),
+        queryset = Question.objects.select_related("author").prefetch_related("tags").annotate(
+            **_question_count_annotations(),
         ).order_by("-created_at", "-pk")
         if self.request.user.is_authenticated:
             return queryset.filter(Q(status=PublicationStatus.PUBLISHED) | Q(author=self.request.user))

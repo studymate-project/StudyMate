@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { listSubjectRecommendations } from '../api/resources'
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { fetchSubjectRecommendations } from '../api/resources'
 import { useAuth } from '../auth/useAuth'
+import { QUERY_STALE_TIMES } from '../query/queryClient'
+import { subjectKeys } from '../query/queryKeys'
 
 const EMPTY_INTERESTS = []
 const SUBJECT_COLORS = [
@@ -45,39 +48,22 @@ export default function usePersonalizedSubjects() {
     level: profile?.academic_level || null,
     interests: (profile?.interests || EMPTY_INTERESTS).map((interest) => interest.id || interest.slug || interest.name),
   })
-  const requestKey = `${authStatus}:${profileKey}`
-  const [state, setState] = useState({ requestKey: null, data: [], error: null, profileComplete: false, hasInterests: false })
-
-  useEffect(() => {
-    if (authStatus !== 'authenticated') return undefined
-
-    let active = true
-    listSubjectRecommendations().then((data) => {
-      if (active) setState({
-        requestKey,
-        data: (data.results || []).map(normalizeSubject),
-        error: null,
-        profileComplete: Boolean(data.profile_complete),
-        hasInterests: Boolean(data.has_interests),
-      })
-    }).catch((error) => {
-      if (active) setState({ requestKey, data: [], error, profileComplete: false, hasInterests: false })
-    })
-
-    return () => {
-      active = false
-    }
-  }, [authStatus, requestKey])
-
-  const currentState = state.requestKey === requestKey ? state : { data: [], error: null, profileComplete: false, hasInterests: false }
-  const subjects = useMemo(() => currentState.data, [currentState.data])
+  const subjectScope = `${user?.id || 'current'}:${profileKey}`
+  const query = useQuery({
+    queryKey: subjectKeys.recommendations(subjectScope, 12),
+    queryFn: () => fetchSubjectRecommendations(12),
+    enabled: authStatus === 'authenticated',
+    staleTime: QUERY_STALE_TIMES.subjects,
+  })
+  const currentData = query.data || {}
+  const subjects = useMemo(() => (currentData.results || []).map(normalizeSubject), [currentData.results])
 
   return {
     authStatus,
-    error: currentState.error,
-    hasSelectedInterests: currentState.hasInterests,
-    isProfileComplete: currentState.profileComplete || profile?.onboarding_completed === true,
-    loading: authStatus === 'loading' || (authStatus === 'authenticated' && state.requestKey !== requestKey),
+    error: query.error,
+    hasSelectedInterests: Boolean(currentData.has_interests),
+    isProfileComplete: Boolean(currentData.profile_complete) || profile?.onboarding_completed === true,
+    loading: authStatus === 'loading' || (authStatus === 'authenticated' && query.isPending),
     subjects,
   }
 }

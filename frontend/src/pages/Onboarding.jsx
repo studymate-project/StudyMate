@@ -4,7 +4,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { getApiErrorMessage } from '../api/errors'
 import { ACADEMIC_STAGE_TYPES, listAcademicLevels, listCourses, listEducationBackgrounds, submitOnboarding } from '../api/onboarding'
 import { useAuth } from '../auth/useAuth'
-import Spinner from '../components/common/Spinner'
+import { CatalogSkeleton } from '../components/common/Skeletons'
 import { Navigation, OnboardingHeader, SelectionCard } from '../components/onboarding/OnboardingPrimitives'
 import './Onboarding.css'
 
@@ -51,8 +51,8 @@ function isOtherOption(option) {
   return option && (option.slug?.toLowerCase() === 'other' || option.name?.toLowerCase() === 'other')
 }
 
-function CatalogState({ state, loadingMessage, emptyMessage, onRetry }) {
-  if (state.status === 'loading') return <div className="selection-count flex justify-center"><Spinner label={loadingMessage} /></div>
+function CatalogState({ state, emptyMessage, onRetry }) {
+  if (state.status === 'loading') return <CatalogSkeleton rows={3} />
   if (state.status === 'error') {
     return <div className="selection-count" role="alert"><p>{getApiErrorMessage(state.error)}</p><button type="button" onClick={onRetry} className="mt-2 underline">Try again</button></div>
   }
@@ -170,7 +170,7 @@ function Onboarding() {
     sessionStorage.setItem(storageKey, JSON.stringify({ step, profile }))
   }, [storageKey, step, profile])
 
-  if (isComplete) return <Navigate to="/home" replace />
+  if (isComplete) return <Navigate to="/" replace />
 
   const selectEducation = (educationBackground) => {
     setProfile((current) => ({
@@ -242,7 +242,7 @@ function Onboarding() {
       const response = await submitOnboarding(payload)
       if (response?.profile && user) updateUser({ ...user, profile: response.profile })
       sessionStorage.removeItem(storageKey)
-      navigate('/home', { replace: true })
+      navigate('/', { replace: true })
     } catch (error) {
       setSubmissionError(error)
     } finally {

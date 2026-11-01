@@ -1,30 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { getApiErrorMessage } from '../api'
-import { deleteResourceRating, getResourceBySlug, saveResourceRating, trackResourceView } from '../api/resources'
+import { deleteResourceRating, fetchResourceDetail, getResourceBySlug, saveResourceRating, trackResourceView } from '../api/resources'
 import { useAuth } from '../auth/useAuth'
 import RatingControl from '../components/common/RatingControl'
 import DiscussionPanel from '../components/common/DiscussionPanel'
-import Spinner from '../components/common/Spinner'
+import { ResourceDetailSkeleton } from '../components/common/Skeletons'
 import PdfPreview from '../components/resources/PdfPreview'
 import RelatedResourceList from '../components/resources/RelatedResourceList'
 import ResourceHeader from '../components/resources/ResourceHeader'
 import TagList from '../components/resources/TagList'
 import UploaderCard from '../components/resources/UploaderCard'
+import { QUERY_STALE_TIMES } from '../query/queryClient'
+import { resourceKeys } from '../query/queryKeys'
 
 const formatNumber = (value) => Number(value).toLocaleString('en-IN')
 
-const initialState = {
-  resource: null,
-  loading: true,
-  error: null,
-  queryKey: null,
-}
-
 function ResourceMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
+  if (loadingLabel) return <ResourceDetailSkeleton />
+
   return (
     <div className="mx-auto flex w-full max-w-[900px] justify-center px-5 py-20 text-center sm:px-8">
-      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Link className="mt-7 inline-flex min-h-11 items-center rounded-xl px-5 font-black text-white" to="/explore">Back to Explore</Link> : null}</div>}
+      <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Link className="mt-7 inline-flex min-h-11 items-center rounded-xl px-5 font-black text-white" to="/explore">Back to Explore</Link> : null}</div>
     </div>
   )
 }
@@ -93,44 +91,32 @@ function ResourceDetails() {
 function ResourceDetailsView({ slug }) {
   const queryKey = slug || ''
   const { status: authStatus } = useAuth()
-  const [state, setState] = useState(initialState)
+  const resourceQuery = useQuery({
+    queryKey: resourceKeys.detail(queryKey),
+    queryFn: () => fetchResourceDetail(queryKey),
+    enabled: Boolean(queryKey),
+    staleTime: QUERY_STALE_TIMES.details,
+  })
+  const resource = resourceQuery.data || null
+  const loading = resourceQuery.isPending
+  const error = resourceQuery.error
   const [downloadCount, setDownloadCount] = useState(null)
-  const [userRating, setUserRating] = useState(null)
+  const [userRatingOverride, setUserRatingOverride] = useState(undefined)
   const [ratingState, setRatingState] = useState('idle')
   const [ratingError, setRatingError] = useState('')
   const [ratingNotice, setRatingNotice] = useState('')
   const trackedViewId = useRef(null)
 
   useEffect(() => {
-    let isCurrent = true
-
-    getResourceBySlug(queryKey).then(
-      (resource) => {
-        if (!isCurrent) return
-
-        setState({ resource, loading: false, error: null, queryKey })
-        setUserRating(resource.userRating ?? null)
-        if (resource.id && trackedViewId.current !== resource.id) {
-          trackedViewId.current = resource.id
-          trackResourceView(resource.id).catch(() => {
-            // View tracking is best effort and must not block the resource.
-          })
-        }
-      },
-      (error) => {
-        if (isCurrent) setState({ resource: null, loading: false, error, queryKey })
-      },
-    )
-
-    return () => {
-      isCurrent = false
+    if (!resource) return
+    if (resource.id && trackedViewId.current !== resource.id) {
+      trackedViewId.current = resource.id
+      trackResourceView(resource.id).catch(() => {
+        // View tracking is best effort and must not block the resource.
+      })
     }
-  }, [queryKey])
-
-  const isCurrentQuery = state.queryKey === queryKey
-  const loading = !isCurrentQuery || state.loading
-  const resource = isCurrentQuery ? state.resource : null
-  const error = isCurrentQuery ? state.error : null
+  }, [resource])
+  const userRating = userRatingOverride === undefined ? resource?.userRating ?? null : userRatingOverride
 
   const handleRatingChange = async (nextRating) => {
     if (authStatus !== 'authenticated') {
@@ -143,9 +129,8 @@ function ResourceDetailsView({ slug }) {
     setRatingNotice('')
     try {
       await saveResourceRating(resource.id, nextRating)
-      const refreshedResource = await getResourceBySlug(queryKey)
-      setState({ resource: refreshedResource, loading: false, error: null, queryKey })
-      setUserRating(nextRating)
+      await getResourceBySlug(queryKey)
+      setUserRatingOverride(nextRating)
       setRatingNotice('Your rating was saved.')
     } catch (requestError) {
       setRatingError(getApiErrorMessage(requestError))
@@ -165,9 +150,8 @@ function ResourceDetailsView({ slug }) {
     setRatingNotice('')
     try {
       await deleteResourceRating(resource.id)
-      const refreshedResource = await getResourceBySlug(queryKey)
-      setState({ resource: refreshedResource, loading: false, error: null, queryKey })
-      setUserRating(null)
+      await getResourceBySlug(queryKey)
+      setUserRatingOverride(null)
       setRatingNotice('Your rating was removed.')
     } catch (requestError) {
       setRatingError(getApiErrorMessage(requestError))

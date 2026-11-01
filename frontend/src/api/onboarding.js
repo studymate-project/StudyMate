@@ -1,4 +1,6 @@
 import { apiClient } from './client'
+import { queryClient } from '../query/queryClient'
+import { profileKeys, subjectKeys } from '../query/queryKeys'
 
 export const ACADEMIC_STAGE_TYPES = [
   { value: 'class', label: 'Class' },
@@ -62,5 +64,7 @@ export function listInterests(courseId) {
 
 export async function submitOnboarding(payload) {
   const response = await apiClient.post('/users/onboarding/', payload)
+  queryClient.invalidateQueries({ queryKey: subjectKeys.all })
+  queryClient.invalidateQueries({ queryKey: profileKeys.all })
   return response.data
 }

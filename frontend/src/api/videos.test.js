@@ -22,7 +22,7 @@ function videoResponse() {
   }
 }
 
-test('concurrent video list requests are coalesced without cross-user caching', async () => {
+test('concurrent and completed video list requests share the scoped cache', async () => {
   clearVideoListCache()
   const originalGet = apiClient.get
   let calls = 0
@@ -42,7 +42,7 @@ test('concurrent video list requests are coalesced without cross-user caching', 
     await first
 
     await listVideos({ page: 1, page_size: 20 })
-    assert.equal(calls, 2)
+    assert.equal(calls, 1)
   } finally {
     apiClient.get = originalGet
     clearVideoListCache()

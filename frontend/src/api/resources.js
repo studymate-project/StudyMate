@@ -1,4 +1,6 @@
 import { apiClient } from './client.js'
+import { queryClient, QUERY_STALE_TIMES } from '../query/queryClient.js'
+import { resourceKeys, subjectKeys } from '../query/queryKeys.js'
 
 const resourceTypeLabels = {
   file: 'File',
@@ -44,13 +46,8 @@ const supportedQueryKeys = new Set([
   'uploader',
 ])
 
-const inFlightRequests = new Map()
-const resourceListCache = new Map()
-const RESOURCE_LIST_CACHE_TTL_MS = 30 * 1000
-let resourceCacheGeneration = 0
-const savedResourcesRequests = new Map()
-const savedResourcesCache = new Map()
-let savedResourcesGeneration = 0
+const resourceRequests = new Map()
+const savedResourceRequests = new Map()
 
 function formatDate(value) {
   if (!value) return null
@@ -142,48 +139,54 @@ function normalizeResponse(data) {
   }
 }
 
-export function listResources(params = {}) {
+export function fetchResourceList(params = {}) {
   const query = normalizeParams(params)
-  const requestKey = JSON.stringify(query)
-  const cached = resourceListCache.get(requestKey)
-  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.data)
-  const existingRequest = inFlightRequests.get(requestKey)
-  if (existingRequest) return existingRequest
-
-  const requestGeneration = resourceCacheGeneration
-  const request = apiClient
+  return apiClient
     .get('/resources/', {
       params: query,
       paramsSerializer: { indexes: null },
     })
-    .then((response) => {
-      const data = normalizeResponse(response.data)
-      if (requestGeneration === resourceCacheGeneration) {
-        resourceListCache.set(requestKey, { data, expiresAt: Date.now() + RESOURCE_LIST_CACHE_TTL_MS })
-      }
-      return data
-    })
+    .then((response) => normalizeResponse(response.data))
+}
 
-  inFlightRequests.set(requestKey, request)
+export function listResources(params = {}) {
+  const query = normalizeParams(params)
+  const requestKey = JSON.stringify(query)
+  const existingRequest = resourceRequests.get(requestKey)
+  if (existingRequest) return existingRequest
+
+  const request = queryClient.fetchQuery({
+    queryKey: resourceKeys.list(query),
+    queryFn: () => fetchResourceList(query),
+    staleTime: QUERY_STALE_TIMES.lists,
+  })
+  resourceRequests.set(requestKey, request)
   request.then(
-    () => inFlightRequests.delete(requestKey),
-    () => inFlightRequests.delete(requestKey),
+    () => { if (resourceRequests.get(requestKey) === request) resourceRequests.delete(requestKey) },
+    () => { if (resourceRequests.get(requestKey) === request) resourceRequests.delete(requestKey) },
   )
-
   return request
 }
 
-export function listSubjectRecommendations(limit = 12) {
+export function fetchSubjectRecommendations(limit = 12) {
   return apiClient.get('/resources/subjects/', { params: { limit } }).then((response) => response.data)
 }
 
-export function clearResourceListCache() {
-  resourceListCache.clear()
-  inFlightRequests.clear()
-  resourceCacheGeneration += 1
-  savedResourcesCache.clear()
-  savedResourcesGeneration += 1
-  savedResourcesRequests.clear()
+export function listSubjectRecommendations(limit = 12, scope = 'public') {
+  return queryClient.fetchQuery({
+    queryKey: subjectKeys.recommendations(scope, limit),
+    queryFn: () => fetchSubjectRecommendations(limit),
+    staleTime: QUERY_STALE_TIMES.subjects,
+  })
+}
+
+export function clearResourceListCache({ includeSubjects = false } = {}) {
+  resourceRequests.clear()
+  savedResourceRequests.clear()
+  queryClient.invalidateQueries({ queryKey: resourceKeys.lists(), refetchType: 'active' })
+  queryClient.invalidateQueries({ queryKey: resourceKeys.savedLists(), refetchType: 'active' })
+  queryClient.invalidateQueries({ queryKey: resourceKeys.details() })
+  if (includeSubjects) queryClient.invalidateQueries({ queryKey: subjectKeys.all })
 }
 
 export function createResource(formData, uploadId) {
@@ -193,34 +196,32 @@ export function createResource(formData, uploadId) {
       headers: uploadId ? { 'X-Upload-ID': uploadId } : undefined,
     })
     .then((response) => {
-      clearResourceListCache()
+      clearResourceListCache({ includeSubjects: true })
       return response.data
     })
+}
+
+export function fetchSavedResourceList(params = {}) {
+  const query = normalizeParams(params)
+  return apiClient.get('/saved-resources/', { params: query }).then((response) => normalizeResponse(response.data))
 }
 
 export function listSavedResources(params = {}) {
   const query = normalizeParams(params)
   const requestKey = JSON.stringify(query)
-  const cached = savedResourcesCache.get(requestKey)
-  if (cached) return Promise.resolve(cached)
-  const existingRequest = savedResourcesRequests.get(requestKey)
+  const existingRequest = savedResourceRequests.get(requestKey)
   if (existingRequest) return existingRequest
 
-  const requestGeneration = savedResourcesGeneration
-  const request = apiClient
-    .get('/saved-resources/', { params: query })
-    .then((response) => {
-      const data = normalizeResponse(response.data)
-      if (requestGeneration === savedResourcesGeneration) savedResourcesCache.set(requestKey, data)
-      return data
-    })
-
-  savedResourcesRequests.set(requestKey, request)
+  const request = queryClient.fetchQuery({
+    queryKey: resourceKeys.savedList(query),
+    queryFn: () => fetchSavedResourceList(query),
+    staleTime: QUERY_STALE_TIMES.lists,
+  })
+  savedResourceRequests.set(requestKey, request)
   request.then(
-    () => { if (savedResourcesRequests.get(requestKey) === request) savedResourcesRequests.delete(requestKey) },
-    () => { if (savedResourcesRequests.get(requestKey) === request) savedResourcesRequests.delete(requestKey) },
+    () => { if (savedResourceRequests.get(requestKey) === request) savedResourceRequests.delete(requestKey) },
+    () => { if (savedResourceRequests.get(requestKey) === request) savedResourceRequests.delete(requestKey) },
   )
-
   return request
 }
 
@@ -269,25 +270,21 @@ export function deleteResource(resourceId) {
   })
 }
 
+export function fetchResourceDetail(slug) {
+  return apiClient
+    .get(`/resources/${encodeURIComponent(slug)}/`)
+    .then((response) => normalizeResource(response.data))
+}
+
 export function getResourceBySlug(slug) {
   const normalizedSlug = slug?.trim()
   if (!normalizedSlug) return Promise.reject(new Error('A resource slug is required.'))
 
-  const requestKey = `detail:${normalizedSlug}`
-  const existingRequest = inFlightRequests.get(requestKey)
-  if (existingRequest) return existingRequest
-
-  const request = apiClient
-    .get(`/resources/${encodeURIComponent(normalizedSlug)}/`)
-    .then((response) => normalizeResource(response.data))
-
-  inFlightRequests.set(requestKey, request)
-  request.then(
-    () => inFlightRequests.delete(requestKey),
-    () => inFlightRequests.delete(requestKey),
-  )
-
-  return request
+  return queryClient.fetchQuery({
+    queryKey: resourceKeys.detail(normalizedSlug),
+    queryFn: () => fetchResourceDetail(normalizedSlug),
+    staleTime: QUERY_STALE_TIMES.details,
+  })
 }
 
 export function trackResourceDownload(resourceId) {

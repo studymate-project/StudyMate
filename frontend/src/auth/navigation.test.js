@@ -11,9 +11,10 @@ test('public home and protected action locations preserve the full internal path
 test('completed users return to a safe protected destination after login', () => {
   const user = { profile: { onboarding_completed: true } }
   assert.equal(getPostAuthDestination(user, '/saved?tab=notes'), '/saved?tab=notes')
-  assert.equal(getPostAuthDestination(user, 'https://example.test/account'), '/home')
-  assert.equal(getPostAuthDestination(user, '/\\evil.example/account'), '/home')
-  assert.equal(getPostAuthDestination(user, '/login'), '/home')
+  assert.equal(getPostAuthDestination(user, 'https://example.test/account'), '/')
+  assert.equal(getPostAuthDestination(user, '/\\evil.example/account'), '/')
+  assert.equal(getPostAuthDestination(user, '/login'), '/')
+  assert.equal(getPostAuthDestination(user, '/home?from=legacy'), '/')
 })
 
 test('new users always complete onboarding before reaching home', () => {

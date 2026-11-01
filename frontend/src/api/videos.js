@@ -1,5 +1,7 @@
 import { apiClient } from './client.js'
 import { isValidYouTubeVideoId } from '../utils/youtubeUtils.js'
+import { queryClient, QUERY_STALE_TIMES } from '../query/queryClient.js'
+import { videoKeys } from '../query/queryKeys.js'
 
 const choiceLabels = {
   beginner: 'Beginner',
@@ -7,7 +9,6 @@ const choiceLabels = {
   advanced: 'Advanced',
 }
 
-const inFlightRequests = new Map()
 const supportedQueryKeys = new Set([
   'page',
   'page_size',
@@ -20,6 +21,9 @@ const supportedQueryKeys = new Set([
   'ordering',
   'uploader',
 ])
+
+const videoRequests = new Map()
+let videoCacheGeneration = 0
 
 function normalizeParams(params) {
   return Object.fromEntries(
@@ -109,14 +113,30 @@ export function createVideo(payload) {
 
 export function listVideos(params = {}) {
   const query = normalizeParams(params)
-  const requestKey = `video-list:${JSON.stringify(query)}`
-  // The API includes the authenticated user's own non-published videos, so
-  // only coalesce concurrent requests; do not retain a completed list across
-  // account changes or logout/login transitions.
-  const existingRequest = inFlightRequests.get(requestKey)
+  const requestKey = JSON.stringify(query)
+  const existingRequest = videoRequests.get(requestKey)
   if (existingRequest) return existingRequest
 
-  const request = apiClient.get('/videos/', { params: query }).then((response) => {
+  const requestGeneration = videoCacheGeneration
+  const request = queryClient.fetchQuery({
+    queryKey: videoKeys.list(query),
+    queryFn: () => fetchVideoList(query),
+    staleTime: QUERY_STALE_TIMES.lists,
+  })
+  request.then(() => {
+    if (requestGeneration !== videoCacheGeneration) queryClient.removeQueries({ queryKey: videoKeys.list(query), exact: true })
+  })
+  videoRequests.set(requestKey, request)
+  request.then(
+    () => { if (videoRequests.get(requestKey) === request) videoRequests.delete(requestKey) },
+    () => { if (videoRequests.get(requestKey) === request) videoRequests.delete(requestKey) },
+  )
+  return request
+}
+
+export function fetchVideoList(params = {}) {
+  const query = normalizeParams(params)
+  return apiClient.get('/videos/', { params: query }).then((response) => {
     const data = response.data
     const results = Array.isArray(data) ? data : data?.results || []
 
@@ -130,13 +150,6 @@ export function listVideos(params = {}) {
     }
     return normalized
   })
-
-  inFlightRequests.set(requestKey, request)
-  request.then(
-    () => { if (inFlightRequests.get(requestKey) === request) inFlightRequests.delete(requestKey) },
-    () => { if (inFlightRequests.get(requestKey) === request) inFlightRequests.delete(requestKey) },
-  )
-  return request
 }
 
 export async function listAllVideos(params = {}) {
@@ -156,30 +169,27 @@ export async function listAllVideos(params = {}) {
 }
 
 export function clearVideoListCache() {
-  inFlightRequests.forEach((request, key) => {
-    if (String(key).startsWith('video-list:')) inFlightRequests.delete(key)
-  })
+  videoCacheGeneration += 1
+  videoRequests.clear()
+  queryClient.invalidateQueries({ queryKey: videoKeys.lists(), refetchType: 'active' })
+  queryClient.invalidateQueries({ queryKey: videoKeys.details(), refetchType: 'active' })
+}
+
+export function fetchVideoDetail(slug) {
+  return apiClient
+    .get(`/videos/${encodeURIComponent(slug)}/`)
+    .then((response) => normalizeVideo(response.data))
 }
 
 export function getVideoBySlug(slug) {
   const normalizedSlug = slug?.trim()
   if (!normalizedSlug) return Promise.reject(new Error('A video slug is required.'))
 
-  const requestKey = `video-detail:${normalizedSlug}`
-  const existingRequest = inFlightRequests.get(requestKey)
-  if (existingRequest) return existingRequest
-
-  const request = apiClient
-    .get(`/videos/${encodeURIComponent(normalizedSlug)}/`)
-    .then((response) => normalizeVideo(response.data))
-
-  inFlightRequests.set(requestKey, request)
-  request.then(
-    () => inFlightRequests.delete(requestKey),
-    () => inFlightRequests.delete(requestKey),
-  )
-
-  return request
+  return queryClient.fetchQuery({
+    queryKey: videoKeys.detail(normalizedSlug),
+    queryFn: () => fetchVideoDetail(normalizedSlug),
+    staleTime: QUERY_STALE_TIMES.details,
+  })
 }
 
 export function saveVideoRating(videoSlug, rating) {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { createQuestion, getApiErrorMessage, getApiFieldErrors } from '../api'
 import Button from '../components/common/Button'
 import Toast from '../components/common/Toast'
@@ -53,7 +53,7 @@ function AskQuestion() {
           {errors.body ? <span className="mt-1 block text-sm font-bold text-[var(--color-danger)]">{errors.body}</span> : null}
         </label>
         <Field label="Subject" value={form.subject} error={errors.subject} onChange={(value) => updateField('subject', value)} placeholder="Java" />
-        {createdQuestion?.slug ? <p className="border border-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_12%,var(--color-surface))] p-3 font-black text-[var(--color-success)]">Question posted successfully. <a href={`/questions/${createdQuestion.slug}`} className="underline">View question</a></p> : null}
+        {createdQuestion?.slug ? <p className="border border-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_12%,var(--color-surface))] p-3 font-black text-[var(--color-success)]">Question posted successfully. <Link to={`/questions/${createdQuestion.slug}`} className="underline">View question</Link></p> : null}
         <div className="flex flex-wrap gap-3">
           <Button type="submit" disabled={posting}>{posting ? 'Posting...' : 'Post Question'}</Button>
           <Button type="button" variant="dark" onClick={() => navigate('/community')}>Cancel</Button>

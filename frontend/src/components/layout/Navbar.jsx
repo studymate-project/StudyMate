@@ -3,15 +3,22 @@ import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { getApiErrorMessage } from '../../api/errors'
 import { useAuth } from '../../auth/useAuth'
+import { preloadRoute } from '../../routes/routeLoaders'
 import IconButton from '../common/IconButton'
 import SearchBar from '../common/SearchBar'
 
 const navItems = [
-  { label: 'Home', to: '/' },
-  { label: 'Explore', to: '/explore' },
-  { label: 'Community', to: '/community' },
-  { label: 'Upload', to: '/upload' },
+  { label: 'Home', to: '/', routeKey: 'home' },
+  { label: 'Explore', to: '/explore', routeKey: 'explore' },
+  { label: 'Community', to: '/community', routeKey: 'community' },
+  { label: 'Upload', to: '/upload', routeKey: 'uploadResource' },
 ]
+
+function preloadNavRoute(routeKey) {
+  void preloadRoute(routeKey).catch((error) => {
+    console.error(`Unable to preload route: ${routeKey}`, error)
+  })
+}
 
 function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -59,7 +66,7 @@ function Navbar() {
 
         <nav className="hidden items-center gap-2 md:flex" aria-label="Primary navigation">
           {navItems.map((item) => (
-            <NavLink key={item.to} to={item.to} className={linkClass}>
+            <NavLink key={item.to} to={item.to} className={linkClass} onMouseEnter={() => preloadNavRoute(item.routeKey)} onFocus={() => preloadNavRoute(item.routeKey)}>
               {item.label}
             </NavLink>
           ))}
@@ -92,7 +99,7 @@ function Navbar() {
             <SearchBar placeholder="Search anything..." />
             <nav className="grid grid-cols-2 gap-2" aria-label="Mobile navigation">
               {navItems.map((item) => (
-                <NavLink key={item.to} to={item.to} className={linkClass} onClick={() => setMenuOpen(false)}>
+                <NavLink key={item.to} to={item.to} className={linkClass} onMouseEnter={() => preloadNavRoute(item.routeKey)} onFocus={() => preloadNavRoute(item.routeKey)} onClick={() => setMenuOpen(false)}>
                   {item.label}
                 </NavLink>
               ))}

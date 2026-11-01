@@ -1,44 +1,34 @@
 import { Triangle } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getApiErrorMessage, listQuestions } from '../api'
+import { getApiErrorMessage } from '../api'
+import { fetchQuestionList } from '../api/questions'
 import Button from '../components/common/Button'
-import Spinner from '../components/common/Spinner'
 import QuestionDescription from '../components/community/QuestionDescription'
+import { QuestionListSkeleton } from '../components/common/Skeletons'
+import { QUERY_STALE_TIMES } from '../query/queryClient'
+import { questionKeys } from '../query/queryKeys'
 
 const tabs = ['Latest', 'Trending', 'Unanswered', 'Popular']
 const topics = ['Java', 'DSA', 'DBMS', 'OS', 'React', 'Python']
 
 function Community() {
   const [activeTab, setActiveTab] = useState('Latest')
-  const [questions, setQuestions] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    let active = true
-    listQuestions()
-      .then(({ questions: nextQuestions }) => {
-        if (!active) return
-        setQuestions(nextQuestions)
-        setError(null)
-      })
-      .catch((requestError) => {
-        if (active) setError(getApiErrorMessage(requestError))
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-
-    return () => { active = false }
-  }, [])
+  const questionQuery = useQuery({
+    queryKey: questionKeys.list({}),
+    queryFn: () => fetchQuestionList({}),
+    staleTime: QUERY_STALE_TIMES.lists,
+  })
+  const loading = questionQuery.isPending
+  const error = questionQuery.error ? getApiErrorMessage(questionQuery.error) : null
 
   const visibleQuestions = useMemo(() => {
-    const list = [...questions]
+    const list = [...(questionQuery.data?.questions || [])]
     if (activeTab === 'Trending' || activeTab === 'Popular') return list.sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0))
     if (activeTab === 'Unanswered') return list.filter((question) => question.answerCount === 0)
     return list
-  }, [activeTab, questions])
+  }, [activeTab, questionQuery.data?.questions])
 
   return (
     <div>
@@ -68,7 +58,7 @@ function Community() {
           </div>
 
           <section className="mt-4 space-y-3">
-            {loading ? <div className="flex justify-center border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5"><Spinner label="Loading questions" /></div> : null}
+            {loading ? <QuestionListSkeleton /> : null}
             {!loading && error ? <p role="alert" className="border-2 border-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_12%,var(--color-surface))] p-5 font-black text-[var(--color-danger)]">{error}</p> : null}
             {!loading && !error && visibleQuestions.length === 0 ? <p className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5 font-black text-[var(--color-text)]">No questions have been posted yet.</p> : null}
             {!loading && !error ? visibleQuestions.map((question) => <CommunityQuestionCard key={question.id} question={question} />) : null}

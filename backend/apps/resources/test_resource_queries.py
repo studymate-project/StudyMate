@@ -69,3 +69,21 @@ class ResourceMetricQueryTests(TestCase):
             len(small_queries),
             "resource metric serialization should not add one query per resource or event",
         )
+
+    def test_saved_resource_list_preserves_all_metrics(self):
+        resource = self.create_resource("Saved resource")
+        self.add_metrics(resource, offset=1)
+
+        response = self.client.get("/api/saved-resources/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(len(response.data["results"]), 1)
+        data = response.data["results"][0]
+        self.assertEqual(data["views"], 2)
+        self.assertEqual(data["downloads"], 2)
+        self.assertEqual(data["saves"], 1)
+        self.assertEqual(data["upvotes"], 1)
+        self.assertEqual(data["rating"], 4.0)
+        self.assertEqual(data["rating_count"], 1)
+        self.assertEqual(data["user_rating"], 4)
+        self.assertTrue(data["is_saved"])

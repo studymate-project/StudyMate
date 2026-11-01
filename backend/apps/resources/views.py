@@ -130,16 +130,6 @@ def _user_rating_annotation(target_field: str, user) -> dict[str, object]:
     }
 
 
-def _resource_metric_annotations() -> dict[str, object]:
-    return {
-        "_view_count": Count("view_events", distinct=True),
-        "_download_count": Count("download_events", distinct=True),
-        "_save_count": Count("saved_by", distinct=True),
-        "_upvote_count": Count("upvotes", distinct=True),
-        **_rating_annotations("resource"),
-    }
-
-
 def _resource_metric_subquery_annotations() -> dict[str, object]:
     def count_for(model):
         count_queryset = model.objects.filter(resource_id=OuterRef("pk")).order_by().values("resource_id")
@@ -663,7 +653,10 @@ class ResourceViewSet(ModelViewSet):
     http_method_names = ("get", "post", "put", "patch", "delete", "head", "options")
 
     def get_queryset(self):
-        queryset = Resource.objects.select_related("uploader", "academic_level").prefetch_related("tags").annotate(
+        # ResourceSerializer only needs the uploader object and the academic
+        # level primary key. Selecting academic_level here adds a join without
+        # changing the serialized response; the FK id is already on Resource.
+        queryset = Resource.objects.select_related("uploader").prefetch_related("tags").annotate(
             **_resource_metric_subquery_annotations(),
             **_user_rating_annotation("resource", self.request.user),
         ).order_by("-created_at", "-pk")
@@ -932,8 +925,12 @@ class SavedResourceListView(ListAPIView):
     permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
-        queryset = Resource.objects.select_related("uploader", "academic_level").prefetch_related("tags").annotate(
-            **_resource_metric_annotations(),
+        # Use the same correlated metric subqueries as the main resource list.
+        # Counting several reverse relations in one annotation query creates a
+        # large intermediate join (views x downloads x saves x upvotes x
+        # ratings) even though distinct() restores the final counts.
+        queryset = Resource.objects.select_related("uploader").prefetch_related("tags").annotate(
+            **_resource_metric_subquery_annotations(),
             **_user_rating_annotation("resource", self.request.user),
             _is_saved=Value(True),
         ).order_by("-created_at", "-pk")
@@ -970,7 +967,7 @@ class VideoViewSet(DestroyModelMixin, ListModelMixin, RetrieveModelMixin, Create
         return super().get_throttles()
 
     def get_queryset(self):
-        queryset = Video.objects.select_related("uploader", "academic_level").prefetch_related("tags").annotate(
+        queryset = Video.objects.select_related("uploader").prefetch_related("tags").annotate(
             **_rating_annotations("video"),
             **_user_rating_annotation("video", self.request.user),
         ).order_by("-created_at", "-pk")

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ACADEMIC_STAGE_TYPES, getApiErrorMessage, listAcademicLevels, listCourses, listEducationBackgrounds, listInterests, updateProfile } from '../api'
 import Button from '../components/common/Button'
-import Spinner from '../components/common/Spinner'
+import { CatalogSkeleton, ProfileFormSkeleton } from '../components/common/Skeletons'
 import { useAuth } from '../auth/useAuth'
 
 const emptyForm = {
@@ -305,7 +305,7 @@ function InterestField({ options, selected, onChange, disabled = false, loading 
 
   return <fieldset className="rounded-lg border border-[var(--color-border)] bg-[var(--color-band)] p-4">
     <legend className="px-1 text-sm font-semibold text-white">Interest subjects <span className="font-normal text-[var(--color-text)]">(optional, up to 8)</span></legend>
-    {loading ? <div className="mt-2"><Spinner label="Loading interest subjects" /></div> : <>
+    {loading ? <CatalogSkeleton rows={2} /> : <>
       <label className="mt-3 block text-sm font-semibold text-white" htmlFor="interest-subject-search">Find a subject
         <input
           id="interest-subject-search"
@@ -336,7 +336,8 @@ function InterestField({ options, selected, onChange, disabled = false, loading 
 }
 
 function ProfileMessage({ title, message, action = null, loadingLabel = '' }) {
-  return <main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[900px] items-center justify-center px-5 py-12 text-center">{loadingLabel ? <Spinner label={loadingLabel} /> : <section><h1 className="text-2xl font-black text-white">{title}</h1><p className="mt-3 text-sm text-[var(--color-text)]">{message}</p>{action ? <div className="mt-5">{action}</div> : null}</section>}</main>
+  if (loadingLabel) return <ProfileFormSkeleton />
+  return <main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[900px] items-center justify-center px-5 py-12 text-center"><section><h1 className="text-2xl font-black text-white">{title}</h1><p className="mt-3 text-sm text-[var(--color-text)]">{message}</p>{action ? <div className="mt-5">{action}</div> : null}</section></main>
 }
 
 export default EditProfile

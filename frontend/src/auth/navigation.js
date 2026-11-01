@@ -15,7 +15,8 @@ export function getPostAuthDestination(user, from) {
   if (user?.profile?.onboarding_completed !== true) return '/onboarding'
   const fromPath = typeof from === 'string' ? from.split(/[?#]/, 1)[0] : ''
   if (typeof from === 'string' && from.startsWith('/') && !/^\/[\\/]/.test(from) && !['/login', '/signup', '/onboarding'].includes(fromPath)) {
+    if (fromPath === '/home') return '/'
     return from
   }
-  return '/home'
+  return '/'
 }

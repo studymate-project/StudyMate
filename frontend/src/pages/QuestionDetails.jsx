@@ -1,24 +1,23 @@
 import { ThumbsUp, UserRound } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { createAnswer, getApiErrorMessage, getQuestionBySlug, listAnswers, removeAnswerUpvote, upvoteAnswer } from '../api'
+import { createAnswer, getApiErrorMessage, removeAnswerUpvote, upvoteAnswer } from '../api'
+import { fetchQuestionAnswers, fetchQuestionDetail } from '../api/questions'
 import { getLoginState } from '../auth/navigation'
 import { useAuth } from '../auth/useAuth'
 import Button from '../components/common/Button'
-import Spinner from '../components/common/Spinner'
 import QuestionDescription from '../components/community/QuestionDescription'
-
-const initialState = {
-  question: null,
-  loading: true,
-  error: null,
-  queryKey: null,
-}
+import { QuestionDetailSkeleton } from '../components/common/Skeletons'
+import { QUERY_STALE_TIMES } from '../query/queryClient'
+import { questionKeys } from '../query/queryKeys'
 
 function QuestionMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
+  if (loadingLabel) return <QuestionDetailSkeleton />
+
   return (
     <div className="mx-auto flex max-w-[900px] justify-center px-5 py-20 text-center">
-      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/community" className="mt-7">Back to Community</Button> : null}</div>}
+      <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/community" className="mt-7">Back to Community</Button> : null}</div>
     </div>
   )
 }
@@ -28,42 +27,39 @@ function QuestionDetailsView({ slug }) {
   const location = useLocation()
   const navigate = useNavigate()
   const { status: authStatus } = useAuth()
-  const [state, setState] = useState(initialState)
-  const [answers, setAnswers] = useState([])
-  const [answerCount, setAnswerCount] = useState(0)
+  const questionQuery = useQuery({
+    queryKey: questionKeys.detail(queryKey),
+    queryFn: () => fetchQuestionDetail(queryKey),
+    enabled: Boolean(queryKey),
+    staleTime: QUERY_STALE_TIMES.details,
+  })
+  const question = questionQuery.data || null
+  const answerQuery = useQuery({
+    queryKey: questionKeys.answerList(question?.id ?? 'pending'),
+    queryFn: () => fetchQuestionAnswers(question.id),
+    enabled: Boolean(question?.id),
+    staleTime: QUERY_STALE_TIMES.details,
+  })
+  const [addedAnswers, setAddedAnswers] = useState([])
+  const [answerUpvoteOverrides, setAnswerUpvoteOverrides] = useState({})
   const [draft, setDraft] = useState('')
   const [preview, setPreview] = useState(false)
   const [posting, setPosting] = useState(false)
   const [actionError, setActionError] = useState(null)
-  const [questionUpvotes, setQuestionUpvotes] = useState(null)
   const [answerVoteState, setAnswerVoteState] = useState({})
   const answerRef = useRef(null)
 
-  useEffect(() => {
-    let isCurrent = true
-
-    getQuestionBySlug(queryKey).then((question) => Promise.all([question, listAnswers(question.id)])).then(
-      ([question, answerResult]) => {
-        if (!isCurrent) return
-        setState({ question, loading: false, error: null, queryKey })
-        setAnswers(answerResult.answers)
-        setAnswerCount(answerResult.count ?? question.answerCount)
-        setQuestionUpvotes(question.upvotes)
-      },
-      (error) => {
-        if (isCurrent) setState({ question: null, loading: false, error, queryKey })
-      },
-    )
-
-    return () => {
-      isCurrent = false
-    }
-  }, [queryKey])
-
-  const isCurrentQuery = state.queryKey === queryKey
-  const loading = !isCurrentQuery || state.loading
-  const question = isCurrentQuery ? state.question : null
-  const error = isCurrentQuery ? state.error : null
+  const loading = questionQuery.isPending || (Boolean(question) && answerQuery.isPending)
+  const error = questionQuery.error || answerQuery.error
+  const baseAnswers = answerQuery.data?.answers || []
+  const baseAnswerIds = new Set(baseAnswers.map((answer) => answer.id))
+  const answers = [...baseAnswers, ...addedAnswers.filter((answer) => !baseAnswerIds.has(answer.id))].map((answer) => (
+    answerUpvoteOverrides[answer.id] === undefined
+      ? answer
+      : { ...answer, upvotes: answerUpvoteOverrides[answer.id] }
+  ))
+  const answerCount = (answerQuery.data?.count ?? question?.answerCount ?? 0)
+    + addedAnswers.filter((answer) => !baseAnswerIds.has(answer.id)).length
 
   if (loading) return <QuestionMessage loadingLabel="Loading question" showBackLink={false} />
   if (error?.status === 404) return <QuestionMessage title="Question Not Found" message="This question may have been moved or removed." />
@@ -82,8 +78,7 @@ function QuestionDetailsView({ slug }) {
     setActionError(null)
     try {
       const answer = await createAnswer(question.id, body)
-      setAnswers((current) => [...current, answer])
-      setAnswerCount((count) => count + 1)
+      setAddedAnswers((current) => [...current, answer])
       setDraft('')
       setPreview(false)
     } catch (requestError) {
@@ -108,9 +103,7 @@ function QuestionDetailsView({ slug }) {
         ? await removeAnswerUpvote(question.id, answer.id)
         : await upvoteAnswer(question.id, answer.id)
       setAnswerVoteState((stateValue) => ({ ...stateValue, [answer.id]: { upvoted: result.upvoted, pending: false } }))
-      setAnswers((currentAnswers) => currentAnswers.map((item) => (
-        item.id === answer.id ? { ...item, upvotes: result.upvotes } : item
-      )))
+      setAnswerUpvoteOverrides((currentValues) => ({ ...currentValues, [answer.id]: result.upvotes }))
     } catch (requestError) {
       setAnswerVoteState((stateValue) => ({ ...stateValue, [answer.id]: { ...current, pending: false } }))
       setActionError(getApiErrorMessage(requestError))
@@ -122,7 +115,7 @@ function QuestionDetailsView({ slug }) {
     answerRef.current?.focus()
   }
 
-  const displayedQuestionUpvotes = questionUpvotes == null ? 'N/A' : questionUpvotes
+  const displayedQuestionUpvotes = question.upvotes == null ? 'N/A' : question.upvotes
 
   return (
     <div className="mx-auto w-full max-w-[1260px] px-5 py-6 sm:px-8 lg:px-10">

@@ -46,7 +46,7 @@ export function ProtectedRoute({ children }) {
 export function PublicOnlyRoute({ children }) {
   const { status, user } = useAuth()
   if (status === 'authenticated') {
-    return <Navigate to={user?.profile?.onboarding_completed ? '/home' : '/onboarding'} replace />
+    return <Navigate to={user?.profile?.onboarding_completed ? '/' : '/onboarding'} replace />
   }
   return children
 }

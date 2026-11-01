@@ -1,9 +1,6 @@
 import { apiClient } from './client'
-
-const inFlightRequests = new Map()
-const questionListCache = new Map()
-const QUESTION_LIST_CACHE_TTL_MS = 30 * 1000
-let questionCacheGeneration = 0
+import { queryClient, QUERY_STALE_TIMES } from '../query/queryClient'
+import { questionKeys } from '../query/queryKeys'
 
 function formatDate(value) {
   if (!value) return null
@@ -76,38 +73,31 @@ function normalizeQuestionResponse(data) {
   }
 }
 
-export function listQuestions(params = {}) {
-  const query = Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''))
-  const requestKey = JSON.stringify(query)
-  const cached = questionListCache.get(requestKey)
-  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.data)
-  const existingRequest = inFlightRequests.get(`list:${requestKey}`)
-  if (existingRequest) return existingRequest
+function normalizeParams(params) {
+  return Object.fromEntries(Object.entries(params || {}).filter(([, value]) => value !== undefined && value !== null && value !== ''))
+}
 
-  const requestGeneration = questionCacheGeneration
-  const request = apiClient
+export function fetchQuestionList(params = {}) {
+  const query = normalizeParams(params)
+  return apiClient
     .get('/questions/', { params: query })
-    .then((response) => {
-      const data = normalizeQuestionResponse(response.data)
-      if (requestGeneration === questionCacheGeneration) {
-        questionListCache.set(requestKey, { data, expiresAt: Date.now() + QUESTION_LIST_CACHE_TTL_MS })
-      }
-      return data
-    })
-  inFlightRequests.set(`list:${requestKey}`, request)
-  request.then(
-    () => inFlightRequests.delete(`list:${requestKey}`),
-    () => inFlightRequests.delete(`list:${requestKey}`),
-  )
-  return request
+    .then((response) => normalizeQuestionResponse(response.data))
+}
+
+export function listQuestions(params = {}) {
+  const query = normalizeParams(params)
+  return queryClient.fetchQuery({
+    queryKey: questionKeys.list(query),
+    queryFn: () => fetchQuestionList(query),
+    staleTime: QUERY_STALE_TIMES.lists,
+  })
 }
 
 export function clearQuestionListCache() {
-  questionListCache.clear()
-  questionCacheGeneration += 1
-  inFlightRequests.forEach((request, key) => {
-    if (String(key).startsWith('list:')) inFlightRequests.delete(key)
-  })
+  queryClient.invalidateQueries({ queryKey: questionKeys.lists(), refetchType: 'active' })
+  queryClient.invalidateQueries({ queryKey: questionKeys.answers(), refetchType: 'active' })
+  queryClient.invalidateQueries({ queryKey: [...questionKeys.all, 'author-answers'], refetchType: 'active' })
+  queryClient.invalidateQueries({ queryKey: questionKeys.details(), refetchType: 'active' })
 }
 
 export function createQuestion(payload) {
@@ -119,28 +109,24 @@ export function createQuestion(payload) {
     })
 }
 
+export function fetchQuestionDetail(slug) {
+  return apiClient
+    .get(`/questions/${encodeURIComponent(slug)}/`)
+    .then((response) => normalizeQuestion(response.data))
+}
+
 export function getQuestionBySlug(slug) {
   const normalizedSlug = slug?.trim()
   if (!normalizedSlug) return Promise.reject(new Error('A question slug is required.'))
 
-  const requestKey = `question-detail:${normalizedSlug}`
-  const existingRequest = inFlightRequests.get(requestKey)
-  if (existingRequest) return existingRequest
-
-  const request = apiClient
-    .get(`/questions/${encodeURIComponent(normalizedSlug)}/`)
-    .then((response) => normalizeQuestion(response.data))
-
-  inFlightRequests.set(requestKey, request)
-  request.then(
-    () => inFlightRequests.delete(requestKey),
-    () => inFlightRequests.delete(requestKey),
-  )
-
-  return request
+  return queryClient.fetchQuery({
+    queryKey: questionKeys.detail(normalizedSlug),
+    queryFn: () => fetchQuestionDetail(normalizedSlug),
+    staleTime: QUERY_STALE_TIMES.details,
+  })
 }
 
-export async function listAnswers(questionId) {
+export async function fetchQuestionAnswers(questionId) {
   if (questionId === null || questionId === undefined) return Promise.reject(new Error('A question ID is required.'))
 
   const answers = []
@@ -163,15 +149,31 @@ export async function listAnswers(questionId) {
   return { answers, count }
 }
 
-export function listAnswersByAuthor() {
+export function listAnswers(questionId) {
+  if (questionId === null || questionId === undefined) return Promise.reject(new Error('A question ID is required.'))
+
+  return queryClient.fetchQuery({
+    queryKey: questionKeys.answerList(questionId),
+    queryFn: () => fetchQuestionAnswers(questionId),
+    staleTime: QUERY_STALE_TIMES.details,
+  })
+}
+
+export function fetchAnswersByAuthor(params = {}) {
+  const query = normalizeParams(params)
   return apiClient
-    .get('/questions/answers/')
+    .get('/questions/answers/', { params: query })
     .then((response) => {
       const data = response.data
       const results = Array.isArray(data) ? data : data?.results || []
       return {
         answers: results.map(normalizeAnswer),
         count: Array.isArray(data) ? results.length : data?.count ?? results.length,
+        pagination: {
+          count: Array.isArray(data) ? results.length : data?.count || 0,
+          next: Array.isArray(data) ? null : data?.next || null,
+          previous: Array.isArray(data) ? null : data?.previous || null,
+        },
       }
     })
 }
@@ -192,6 +194,15 @@ export function upvoteQuestion(questionId) {
   })
 }
 
+export function listAnswersByAuthor(userId = 'current', params = {}) {
+  const query = normalizeParams(params)
+  return queryClient.fetchQuery({
+    queryKey: questionKeys.authorAnswers(userId, query),
+    queryFn: () => fetchAnswersByAuthor(query),
+    staleTime: QUERY_STALE_TIMES.profile,
+  })
+}
+
 export function removeQuestionUpvote(questionId) {
   return apiClient.delete(`/questions/${questionId}/upvote/`).then((response) => {
     clearQuestionListCache()
@@ -200,9 +211,17 @@ export function removeQuestionUpvote(questionId) {
 }
 
 export function upvoteAnswer(questionId, answerId) {
-  return apiClient.post(`/questions/${questionId}/answers/${answerId}/upvote/`).then((response) => response.data)
+  return apiClient.post(`/questions/${questionId}/answers/${answerId}/upvote/`).then((response) => {
+    queryClient.invalidateQueries({ queryKey: questionKeys.answerList(questionId), refetchType: 'active' })
+    queryClient.invalidateQueries({ queryKey: questionKeys.details(), refetchType: 'active' })
+    return response.data
+  })
 }
 
 export function removeAnswerUpvote(questionId, answerId) {
-  return apiClient.delete(`/questions/${questionId}/answers/${answerId}/upvote/`).then((response) => response.data)
+  return apiClient.delete(`/questions/${questionId}/answers/${answerId}/upvote/`).then((response) => {
+    queryClient.invalidateQueries({ queryKey: questionKeys.answerList(questionId), refetchType: 'active' })
+    queryClient.invalidateQueries({ queryKey: questionKeys.details(), refetchType: 'active' })
+    return response.data
+  })
 }

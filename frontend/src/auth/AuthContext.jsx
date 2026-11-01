@@ -99,6 +99,7 @@ export function AuthProvider({ children }) {
       await logout()
     } catch (error) {
       if (error?.status !== 401) throw error
+      clearClientAuthState()
     }
 
     setUser(null)

@@ -33,6 +33,7 @@ export {
 export {
   clearCurrentProfileCache,
   followProfile,
+  getEducationSelection,
   getCurrentProfile,
   getPublicProfile,
   normalizeProfileResponse,

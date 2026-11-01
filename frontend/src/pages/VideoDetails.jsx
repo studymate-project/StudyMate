@@ -1,8 +1,9 @@
 import { Bookmark, Eye, Share2, ThumbsUp, UserRound } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getApiErrorMessage } from '../api'
-import { deleteVideoRating, getVideoBySlug, saveVideoRating } from '../api/videos'
+import { deleteVideoRating, fetchVideoDetail, getVideoBySlug, saveVideoRating } from '../api/videos'
 import { getLoginState } from '../auth/navigation'
 import { useAuth } from '../auth/useAuth'
 import Button from '../components/common/Button'
@@ -10,22 +11,19 @@ import DiscussionPanel from '../components/common/DiscussionPanel'
 import IconButton from '../components/common/IconButton'
 import Rating from '../components/common/Rating'
 import RatingControl from '../components/common/RatingControl'
-import Spinner from '../components/common/Spinner'
+import { VideoDetailSkeleton } from '../components/common/Skeletons'
 import YouTubePlayer from '../components/video/YouTubePlayer'
+import { QUERY_STALE_TIMES } from '../query/queryClient'
+import { videoKeys } from '../query/queryKeys'
 
 const formatNumber = (value) => Number(value).toLocaleString('en-IN')
 
-const initialState = {
-  video: null,
-  loading: true,
-  error: null,
-  queryKey: null,
-}
-
 function VideoMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
+  if (loadingLabel) return <VideoDetailSkeleton />
+
   return (
     <div className="mx-auto flex max-w-[900px] justify-center px-5 py-20 text-center">
-      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/explore" className="mt-7">Back to Explore</Button> : null}</div>}
+      <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/explore" className="mt-7">Back to Explore</Button> : null}</div>
     </div>
   )
 }
@@ -58,10 +56,18 @@ function VideoDetailsView({ slug }) {
   const location = useLocation()
   const navigate = useNavigate()
   const { status: authStatus } = useAuth()
-  const [state, setState] = useState(initialState)
+  const videoQuery = useQuery({
+    queryKey: videoKeys.detail(queryKey),
+    queryFn: () => fetchVideoDetail(queryKey),
+    enabled: Boolean(queryKey),
+    staleTime: QUERY_STALE_TIMES.details,
+  })
+  const video = videoQuery.data || null
+  const loading = videoQuery.isPending
+  const error = videoQuery.error
   const [upvoted, setUpvoted] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [userRating, setUserRating] = useState(null)
+  const [userRatingOverride, setUserRatingOverride] = useState(undefined)
   const [ratingState, setRatingState] = useState('idle')
   const [ratingError, setRatingError] = useState('')
   const [ratingNotice, setRatingNotice] = useState('')
@@ -72,30 +78,7 @@ function VideoDetailsView({ slug }) {
     return false
   }
 
-  useEffect(() => {
-    let isCurrent = true
-
-    getVideoBySlug(queryKey).then(
-      (video) => {
-        if (isCurrent) {
-          setState({ video, loading: false, error: null, queryKey })
-          setUserRating(video.userRating ?? null)
-        }
-      },
-      (error) => {
-        if (isCurrent) setState({ video: null, loading: false, error, queryKey })
-      },
-    )
-
-    return () => {
-      isCurrent = false
-    }
-  }, [queryKey])
-
-  const isCurrentQuery = state.queryKey === queryKey
-  const loading = !isCurrentQuery || state.loading
-  const video = isCurrentQuery ? state.video : null
-  const error = isCurrentQuery ? state.error : null
+  const userRating = userRatingOverride === undefined ? video?.userRating ?? null : userRatingOverride
 
   const handleRatingChange = async (nextRating) => {
     if (authStatus !== 'authenticated') {
@@ -108,9 +91,8 @@ function VideoDetailsView({ slug }) {
     setRatingNotice('')
     try {
       await saveVideoRating(queryKey, nextRating)
-      const refreshedVideo = await getVideoBySlug(queryKey)
-      setState({ video: refreshedVideo, loading: false, error: null, queryKey })
-      setUserRating(nextRating)
+      await getVideoBySlug(queryKey)
+      setUserRatingOverride(nextRating)
       setRatingNotice('Your rating was saved.')
     } catch (requestError) {
       setRatingError(getApiErrorMessage(requestError))
@@ -130,9 +112,8 @@ function VideoDetailsView({ slug }) {
     setRatingNotice('')
     try {
       await deleteVideoRating(queryKey)
-      const refreshedVideo = await getVideoBySlug(queryKey)
-      setState({ video: refreshedVideo, loading: false, error: null, queryKey })
-      setUserRating(null)
+      await getVideoBySlug(queryKey)
+      setUserRatingOverride(null)
       setRatingNotice('Your rating was removed.')
     } catch (requestError) {
       setRatingError(getApiErrorMessage(requestError))

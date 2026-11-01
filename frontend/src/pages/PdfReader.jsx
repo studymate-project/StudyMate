@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { getApiErrorMessage } from '../api'
-import { getResourceBySlug } from '../api/resources'
+import { fetchResourceDetail } from '../api/resources'
 import Button from '../components/common/Button'
-import Spinner from '../components/common/Spinner'
+import { ReaderSkeleton } from '../components/common/Skeletons'
 import PdfDocumentViewer from '../components/resources/PdfDocumentViewer'
-
-const initialState = { resource: null, loading: true, error: null, queryKey: null }
+import { QUERY_STALE_TIMES } from '../query/queryClient'
+import { resourceKeys } from '../query/queryKeys'
 
 function ReaderMessage({ title, message, showBackLink = true, loadingLabel = '' }) {
+  if (loadingLabel) return <ReaderSkeleton />
+
   return (
     <div className="mx-auto flex max-w-[900px] justify-center px-5 py-20 text-center">
-      {loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/explore" className="mt-7">Back to Explore</Button> : null}</div>}
+      <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/explore" className="mt-7">Back to Explore</Button> : null}</div>
     </div>
   )
 }
@@ -19,29 +22,16 @@ function ReaderMessage({ title, message, showBackLink = true, loadingLabel = '' 
 function PdfReader() {
   const { slug } = useParams()
   const queryKey = slug || ''
-  const [state, setState] = useState(initialState)
+  const resourceQuery = useQuery({
+    queryKey: resourceKeys.detail(queryKey),
+    queryFn: () => fetchResourceDetail(queryKey),
+    enabled: Boolean(queryKey),
+    staleTime: QUERY_STALE_TIMES.details,
+  })
+  const resource = resourceQuery.data || null
+  const loading = resourceQuery.isPending
+  const error = resourceQuery.error
   const [mediaState, setMediaState] = useState({ url: null, status: 'idle' })
-
-  useEffect(() => {
-    let isCurrent = true
-
-    getResourceBySlug(queryKey).then(
-      (resource) => {
-        if (isCurrent) setState({ resource, loading: false, error: null, queryKey })
-      },
-      (error) => {
-        if (isCurrent) setState({ resource: null, loading: false, error, queryKey })
-      },
-    )
-
-    return () => {
-      isCurrent = false
-    }
-  }, [queryKey])
-
-  const isCurrentQuery = state.queryKey === queryKey
-  const resource = isCurrentQuery ? state.resource : null
-  const error = isCurrentQuery ? state.error : null
   const resourceUrl = resource?.resourceUrl || null
   const markMediaReady = useCallback(() => {
     if (resourceUrl) setMediaState({ url: resourceUrl, status: 'ready' })
@@ -50,7 +40,7 @@ function PdfReader() {
     if (resourceUrl) setMediaState({ url: resourceUrl, status: 'error' })
   }, [resourceUrl])
 
-  if (!isCurrentQuery || state.loading) return <ReaderMessage loadingLabel="Loading resource" showBackLink={false} />
+  if (loading) return <ReaderMessage loadingLabel="Loading resource" showBackLink={false} />
   if (error?.status === 404) return <ReaderMessage title="Resource Not Found" message="This resource may have been moved or removed." />
   if (error) return <ReaderMessage title="Unable to Load Resource" message={getApiErrorMessage(error)} />
   if (!resource) return <ReaderMessage title="Resource Not Found" message="This resource may have been moved or removed." />

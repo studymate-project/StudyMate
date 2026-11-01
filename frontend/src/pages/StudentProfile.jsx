@@ -1,59 +1,151 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import Button from '../components/common/Button'
-import Spinner from '../components/common/Spinner'
+import { ProfilePageSkeleton, Skeleton } from '../components/common/Skeletons'
 import Footer from '../components/layout/Footer'
 import ProfileHeader from '../components/profile/ProfileHeader'
 import ProfileResources from '../components/profile/ProfileResources'
 import { Achievements, RecentAnswers, RecentQuestions } from '../components/profile/ProfileSidebar'
 import { getApiErrorMessage } from '../api/errors'
-import { clearCurrentProfileCache, deleteResource, deleteVideo, getCurrentProfile, unsaveResource, updateProfile } from '../api'
+import {
+  clearCurrentProfileCache,
+  deleteResource,
+  deleteVideo,
+  getEducationSelection,
+  listAnswersByAuthor,
+  listQuestions,
+  listResources,
+  listSavedResources,
+  listVideos,
+  normalizeProfileResponse,
+  unsaveResource,
+  updateProfile,
+} from '../api'
+import { QUERY_STALE_TIMES } from '../query/queryClient'
+import { profileKeys } from '../query/queryKeys'
 import { useAuth } from '../auth/useAuth'
 
 const tabs = ['Resources', 'Questions', 'Answers', 'Saved Resources']
+const PROFILE_PAGE_SIZE = 20
+
+function getNextPageParam(lastPage) {
+  const next = lastPage?.pagination?.next
+  if (!next) return undefined
+
+  const page = Number(new URL(next, window.location.origin).searchParams.get('page'))
+  return Number.isInteger(page) && page > 0 ? page : undefined
+}
+
+function flattenPages(data, property) {
+  return data?.pages?.flatMap((page) => page[property] || []) || []
+}
+
+function getQueryError(query) {
+  return query.isError ? getApiErrorMessage(query.error) : ''
+}
 
 function StudentProfile() {
   const { user: currentUser, updateUser } = useAuth()
   const [activeTab, setActiveTab] = useState('Resources')
-  const [profileState, setProfileState] = useState({ status: 'loading', data: null, error: null })
-  const [reloadKey, setReloadKey] = useState(0)
   const [avatarState, setAvatarState] = useState({ status: 'idle', error: '' })
+
+  const userId = currentUser?.id || null
+  const userKey = userId ? String(userId) : 'current'
+  const queryEnabled = Boolean(userId)
+  const educationQuery = useQuery({
+    queryKey: profileKeys.currentSection(userKey, 'education'),
+    queryFn: () => getEducationSelection(currentUser?.profile),
+    enabled: queryEnabled,
+    staleTime: QUERY_STALE_TIMES.profile,
+  })
+  const resourcesQuery = useInfiniteQuery({
+    queryKey: profileKeys.currentSection(userKey, 'resources'),
+    queryFn: ({ pageParam }) => listResources({ uploader: userId, page: pageParam, page_size: PROFILE_PAGE_SIZE }),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled: queryEnabled,
+    staleTime: QUERY_STALE_TIMES.profile,
+  })
+  const videosQuery = useInfiniteQuery({
+    queryKey: profileKeys.currentSection(userKey, 'videos'),
+    queryFn: ({ pageParam }) => listVideos({ uploader: userId, page: pageParam, page_size: PROFILE_PAGE_SIZE }),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled: queryEnabled,
+    staleTime: QUERY_STALE_TIMES.profile,
+  })
+  const questionsQuery = useInfiniteQuery({
+    queryKey: profileKeys.currentSection(userKey, 'questions'),
+    queryFn: ({ pageParam }) => listQuestions({ author: userId, page: pageParam, page_size: PROFILE_PAGE_SIZE }),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled: queryEnabled,
+    staleTime: QUERY_STALE_TIMES.profile,
+  })
+  const answersQuery = useInfiniteQuery({
+    queryKey: profileKeys.currentSection(userKey, 'answers'),
+    queryFn: ({ pageParam }) => listAnswersByAuthor(userId, { page: pageParam, page_size: PROFILE_PAGE_SIZE }),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled: queryEnabled,
+    staleTime: QUERY_STALE_TIMES.profile,
+  })
+  const savedQuery = useInfiniteQuery({
+    queryKey: profileKeys.currentSection(userKey, 'saved'),
+    queryFn: ({ pageParam }) => listSavedResources({ page: pageParam, page_size: PROFILE_PAGE_SIZE }),
+    initialPageParam: 1,
+    getNextPageParam,
+    enabled: queryEnabled,
+    staleTime: QUERY_STALE_TIMES.profile,
+  })
+
+  const resources = useMemo(() => flattenPages(resourcesQuery.data, 'resources').filter((resource) => resource.authorId === currentUser?.id), [resourcesQuery.data, currentUser?.id])
+  const videos = useMemo(() => flattenPages(videosQuery.data, 'videos').filter((video) => video.author?.id === currentUser?.id), [videosQuery.data, currentUser?.id])
+  const questions = useMemo(() => flattenPages(questionsQuery.data, 'questions'), [questionsQuery.data])
+  const answers = useMemo(() => flattenPages(answersQuery.data, 'answers'), [answersQuery.data])
+  const savedResources = useMemo(() => flattenPages(savedQuery.data, 'resources'), [savedQuery.data])
+  const allResources = useMemo(() => resources.concat(videos.map(normalizeProfileVideo)).sort((first, second) => new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime()), [resources, videos])
+
+  const activityQueries = [resourcesQuery, videosQuery, questionsQuery, answersQuery, savedQuery]
+  const activityStatus = activityQueries.some((query) => query.isError)
+    ? 'error'
+    : activityQueries.every((query) => query.isSuccess)
+      ? 'ready'
+      : 'loading'
+  const activity = useMemo(() => ({
+    loaded: activityStatus === 'ready',
+    statsStatus: activityStatus,
+    resources: allResources,
+    questions,
+    answers,
+    savedResources,
+    resourceCount: (resourcesQuery.data?.pages?.[0]?.pagination?.count || 0) + (videosQuery.data?.pages?.[0]?.pagination?.count || 0),
+    questionCount: questionsQuery.data?.pages?.[0]?.pagination?.count || 0,
+    answerCount: answersQuery.data?.pages?.[0]?.count || 0,
+  }), [activityStatus, allResources, questions, answers, savedResources, resourcesQuery.data, videosQuery.data, questionsQuery.data, answersQuery.data])
+  const profileData = useMemo(() => normalizeProfileResponse({ user: currentUser }, activity, educationQuery.data || {}), [currentUser, activity, educationQuery.data])
+
+  const loadMoreResources = () => Promise.all([
+    resourcesQuery.hasNextPage ? resourcesQuery.fetchNextPage() : null,
+    videosQuery.hasNextPage ? videosQuery.fetchNextPage() : null,
+  ])
+  const loadMoreQuestions = () => questionsQuery.fetchNextPage()
+  const loadMoreAnswers = () => answersQuery.fetchNextPage()
+  const loadMoreSaved = () => savedQuery.fetchNextPage()
 
   const removeUploadedResource = async (resource) => {
     if (resource.targetType === 'video') await deleteVideo(resource.slug)
     else await deleteResource(resource.id)
     clearCurrentProfileCache()
-    setProfileState((current) => current.data
-      ? { ...current, data: { ...current.data, profile: { ...current.data.profile, resources: current.data.profile.resources.filter((item) => !(item.id === resource.id && item.targetType === resource.targetType)) } } }
-      : current)
   }
 
   const removeSavedResource = async (resource) => {
     await unsaveResource(resource.id)
     clearCurrentProfileCache()
-    setProfileState((current) => current.data
-      ? { ...current, data: { ...current.data, profile: { ...current.data.profile, savedResources: current.data.profile.savedResources.filter((item) => item.id !== resource.id) } } }
-      : current)
   }
 
-  useEffect(() => {
-    let isActive = true
-
-    if (!currentUser) return undefined
-
-    getCurrentProfile(currentUser).then(
-      (data) => {
-        if (isActive) setProfileState({ status: 'success', data, error: null })
-      },
-      (error) => {
-        if (isActive) setProfileState({ status: 'error', data: null, error })
-      },
-    )
-
-    return () => { isActive = false }
-  }, [currentUser, reloadKey])
-
   const updateAvatar = async (avatarInput) => {
-    if (!profileState.data?.user?.username) return
+    if (!profileData.user?.username) return
     setAvatarState({ status: 'loading', error: '' })
     try {
       let payload = avatarInput
@@ -61,18 +153,8 @@ function StudentProfile() {
         payload = new FormData()
         payload.append('avatar_file', avatarInput)
       }
-      const updatedProfile = await updateProfile(profileState.data.user.username, payload)
+      const updatedProfile = await updateProfile(profileData.user.username, payload)
       const nextAvatarUrl = updatedProfile.avatar_url || null
-      setProfileState((current) => current.data
-        ? {
-          ...current,
-          data: {
-            ...current.data,
-            user: { ...current.data.user, avatarUrl: nextAvatarUrl },
-            profile: { ...current.data.profile, avatarUrl: nextAvatarUrl || '' },
-          },
-        }
-        : current)
       updateUser({
         ...currentUser,
         profile: { ...currentUser.profile, avatar_url: nextAvatarUrl || '' },
@@ -84,53 +166,59 @@ function StudentProfile() {
     }
   }
 
-  if (profileState.status === 'loading') {
-    return <ProfilePageState loadingLabel="Loading profile" />
-  }
+  if (!currentUser) return <ProfilePageSkeleton />
 
-  if (profileState.status === 'error') {
-    const isUnauthenticated = profileState.error?.status === 401
-    return <ProfilePageState
-      title={isUnauthenticated ? 'Sign in required' : 'Unable to load profile'}
-      message={isUnauthenticated ? 'Sign in to view your profile.' : getApiErrorMessage(profileState.error)}
-      action={isUnauthenticated
-        ? <Button to="/login" variant="secondary" className="mt-5">Sign in</Button>
-        : <button type="button" onClick={() => { setProfileState({ status: 'loading', data: null, error: null }); setReloadKey((key) => key + 1) }} className="mt-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-2 text-sm font-semibold text-[var(--color-text)] hover:bg-[var(--color-blue-hover)]">Try again</button>}
-    />
-  }
-
-  const { user, profile } = profileState.data
+  const resourcesError = [resourcesQuery, videosQuery].map(getQueryError).filter(Boolean).join(' ')
+  const questionsError = getQueryError(questionsQuery)
+  const answersError = getQueryError(answersQuery)
+  const savedError = getQueryError(savedQuery)
   const tabContent = activeTab === 'Resources'
-    ? <ProfileResources resources={profile.resources} onDelete={removeUploadedResource} />
+    ? <ProfileResources
+      resources={allResources}
+      loading={resourcesQuery.isPending || videosQuery.isPending}
+      errorMessage={resourcesError}
+      onRetry={() => { void resourcesQuery.refetch(); void videosQuery.refetch() }}
+      hasMore={resourcesQuery.hasNextPage || videosQuery.hasNextPage}
+      loadingMore={resourcesQuery.isFetchingNextPage || videosQuery.isFetchingNextPage}
+      onLoadMore={loadMoreResources}
+      onDelete={removeUploadedResource}
+    />
     : activeTab === 'Questions'
-      ? <RecentQuestions questions={profile.recentQuestions} />
+      ? <RecentQuestions
+        questions={questions.map((question) => ({ questionId: question.id, slug: question.slug, title: question.title, votes: question.upvotes ?? 0, answers: question.answerCount ?? 0 }))}
+        loading={questionsQuery.isPending}
+        errorMessage={questionsError}
+        onRetry={() => { void questionsQuery.refetch() }}
+        hasMore={questionsQuery.hasNextPage}
+        loadingMore={questionsQuery.isFetchingNextPage}
+        onLoadMore={loadMoreQuestions}
+      />
       : activeTab === 'Answers'
-        ? <RecentAnswers answers={profile.recentAnswers} />
-        : <ProfileResources resources={profile.savedResources} title="Saved resources" empty="No saved resources yet. Explore resources and save the ones you want to revisit." onUnsave={removeSavedResource} />
+        ? <RecentAnswers answers={answers} loading={answersQuery.isPending} errorMessage={answersError} onRetry={() => { void answersQuery.refetch() }} hasMore={answersQuery.hasNextPage} loadingMore={answersQuery.isFetchingNextPage} onLoadMore={loadMoreAnswers} />
+        : <ProfileResources resources={savedResources} title="Saved resources" empty="No saved resources yet. Explore resources and save the ones you want to revisit." loading={savedQuery.isPending} errorMessage={savedError} onRetry={() => { void savedQuery.refetch() }} hasMore={savedQuery.hasNextPage} loadingMore={savedQuery.isFetchingNextPage} onLoadMore={loadMoreSaved} onUnsave={removeSavedResource} />
 
-  return <><ProfileHeader user={user} profile={profile} editable avatarBusy={avatarState.status === 'loading'} avatarError={avatarState.error} onAvatarFile={updateAvatar} onAvatarUrl={updateAvatar} action={<Button to="/profile/edit" variant="secondary" className="min-h-9 px-4 text-sm">Edit Profile</Button>} /><main className="mx-auto min-h-[calc(100svh-26rem)] w-full max-w-[1260px] px-5 py-7 sm:px-8 lg:px-10"><ProfileDetails profile={profile} /><div className="mt-7 overflow-x-auto border-b border-[var(--color-border)]"><div className="flex min-w-max justify-between gap-7" role="tablist" aria-label="Profile content">{tabs.map((tab) => <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`min-h-12 border-b-[3px] px-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] ${activeTab === tab ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary-light)]' : 'border-transparent text-[var(--color-text)] hover:text-white'}`}>{tab}</button>)}</div></div><div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]"><section>{tabContent}</section><aside className="space-y-6"><Achievements achievements={profile.achievements} /><RecentQuestions questions={profile.recentQuestions} /></aside></div></main><Footer /></>
+  return <><ProfileHeader user={profileData.user} profile={profileData.profile} editable avatarBusy={avatarState.status === 'loading'} avatarError={avatarState.error} onAvatarFile={updateAvatar} onAvatarUrl={updateAvatar} action={<Button to="/profile/edit" variant="secondary" className="min-h-9 px-4 text-sm">Edit Profile</Button>} /><main className="mx-auto min-h-[calc(100svh-26rem)] w-full max-w-[1260px] px-5 py-7 sm:px-8 lg:px-10"><ProfileDetails profile={profileData.profile} loading={educationQuery.isPending} errorMessage={educationQuery.isError ? getApiErrorMessage(educationQuery.error) : ''} onRetry={() => { void educationQuery.refetch() }} /><div className="mt-7 overflow-x-auto border-b border-[var(--color-border)]"><div className="flex min-w-max justify-between gap-7" role="tablist" aria-label="Profile content">{tabs.map((tab) => <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`min-h-12 border-b-[3px] px-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] ${activeTab === tab ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary-light)]' : 'border-transparent text-[var(--color-text)] hover:text-white'}`}>{tab}</button>)}</div></div><div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]"><section>{tabContent}</section><aside className="space-y-6"><Achievements achievements={profileData.profile.achievements} /><RecentQuestions questions={profileData.profile.recentQuestions} loading={questionsQuery.isPending} errorMessage={questionsError} onRetry={() => { void questionsQuery.refetch() }} showLoadMore={false} /></aside></div></main><Footer /></>
 }
 
-function ProfileDetails({ profile }) {
+function normalizeProfileVideo(video) {
+  return {
+    ...video,
+    targetType: 'video',
+    type: 'Video',
+    resourceType: 'video',
+    resourceUrl: video.originalUrl || (video.youtubeVideoId ? `https://www.youtube.com/watch?v=${video.youtubeVideoId}` : null),
+  }
+}
+
+function ProfileDetails({ profile, loading, errorMessage, onRetry }) {
   const background = profile.customBackground || profile.educationBackground?.name
   const course = profile.customCourse || profile.course?.name
   const stage = profile.academicLevel?.name || profile.academicLevelValue
   const location = [profile.city, profile.state, profile.country].filter(Boolean).join(', ')
-  const details = [
-    ['Location', location],
-    ['Educational background', background],
-    ['Course / program', course],
-    ['Academic level / stage', stage],
-  ].filter(([, value]) => value)
+  const details = [['Location', location], ['Educational background', background], ['Course / program', course], ['Academic level / stage', stage]].filter(([, value]) => value)
 
-  if (!details.length) return null
-  return <section className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6" aria-label="Education and location">
-    {details.map(([label, value]) => <div key={label}><p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text)]">{label}</p><p className="mt-1 text-sm font-semibold text-white">{value}</p></div>)}
-  </section>
-}
-
-function ProfilePageState({ title, message, action = null, loadingLabel = '' }) {
-  return <><main className="mx-auto flex min-h-[calc(100svh-13rem)] w-full max-w-[1260px] items-center justify-center px-5 py-12 sm:px-8 lg:px-10"><section className="flex w-full max-w-xl items-center justify-center border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-7 text-center">{loadingLabel ? <Spinner label={loadingLabel} /> : <div><h1 className="text-xl font-semibold text-white">{title}</h1><p className="mt-2 text-sm text-[var(--color-text)]">{message}</p>{action}</div>}</section></main><Footer /></>
+  if (!loading && !errorMessage && !details.length) return null
+  return <section className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6" aria-label="Education and location">{errorMessage ? <div className="sm:col-span-2 border border-[var(--color-danger)] p-3 text-sm text-[var(--color-danger)]" role="alert"><p>{errorMessage}</p><button type="button" onClick={onRetry} className="mt-2 font-semibold underline">Try again</button></div> : null}{loading && !details.length ? Array.from({ length: 4 }, (_, index) => <div key={index}><Skeleton className="h-3 w-36" /><Skeleton className="mt-2 h-5 w-44" /></div>) : details.map(([label, value]) => <div key={label}><p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text)]">{label}</p><p className="mt-1 text-sm font-semibold text-white">{value}</p></div>)}</section>
 }
 
 export default StudentProfile

@@ -1,7 +1,10 @@
 import { useResourceList } from '../hooks/useResourceList'
-import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { listVideos } from '../api/videos'
+import { fetchVideoList } from '../api/videos'
+import { QUERY_STALE_TIMES } from '../query/queryClient'
+import { videoKeys } from '../query/queryKeys'
 import ResourceList from '../components/explore/ResourceList'
 import VideoList from '../components/explore/VideoList'
 
@@ -86,32 +89,22 @@ function Explore() {
   }, [activeContent, activeSort, searchParamsKey])
   const showVideos = activeContent === 'video'
   const resourceRequest = useResourceList(showVideos ? null : requestParams)
-  const [videoState, setVideoState] = useState({ videos: [], loading: false, error: null, requestKey: null })
-
   const videoRequestParams = useMemo(
     () => Object.fromEntries(Object.entries(requestParams).filter(([key]) => key !== 'resource_type')),
     [requestParams],
   )
-  const videoRequestKey = JSON.stringify(videoRequestParams)
-
-  useEffect(() => {
-    if (!showVideos) return undefined
-
-    let isCurrent = true
-    listVideos(videoRequestParams).then(
-      (result) => {
-        if (isCurrent) setVideoState({ videos: filterVideos(result.videos, videoRequestParams, activeSort), loading: false, error: null, requestKey: videoRequestKey })
-      },
-      (error) => {
-        if (isCurrent) setVideoState({ videos: [], loading: false, error, requestKey: videoRequestKey })
-      },
-    )
-
-    return () => { isCurrent = false }
-  }, [activeSort, showVideos, videoRequestKey, videoRequestParams])
-
-  const videoLoading = showVideos && (videoState.loading || videoState.requestKey !== videoRequestKey)
-  const videoError = showVideos && videoState.requestKey === videoRequestKey ? videoState.error : null
+  const videoQuery = useQuery({
+    queryKey: videoKeys.list(videoRequestParams),
+    queryFn: () => fetchVideoList(videoRequestParams),
+    enabled: showVideos,
+    staleTime: QUERY_STALE_TIMES.lists,
+  })
+  const videos = useMemo(
+    () => filterVideos(videoQuery.data?.videos, videoRequestParams, activeSort),
+    [activeSort, videoQuery.data?.videos, videoRequestParams],
+  )
+  const videoLoading = showVideos && videoQuery.isPending
+  const videoError = showVideos ? videoQuery.error : null
 
   return (
     <div className="mx-auto w-full max-w-315">
@@ -163,7 +156,7 @@ function Explore() {
           })}
         </div>
 
-        {showVideos ? <VideoList videos={videoState.videos} loading={videoLoading} error={videoError} /> : <ResourceList resources={resourceRequest.resources} loading={resourceRequest.loading} error={resourceRequest.error} />}
+        {showVideos ? <VideoList videos={videos} loading={videoLoading} error={videoError} /> : <ResourceList resources={resourceRequest.resources} loading={resourceRequest.loading} error={resourceRequest.error} />}
       </section>
     </div>
   )

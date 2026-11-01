@@ -1,51 +1,73 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import AppLayout from '../components/layout/AppLayout'
 import { AuthProvider } from '../auth/AuthContext'
 import { AuthGate, ProtectedRoute, PublicOnlyRoute } from '../auth/RouteGuards'
-import Spinner from '../components/common/Spinner'
+import { useAuth } from '../auth/useAuth'
+import { queryClient } from '../query/queryClient'
+import routeLoaders from './routeLoaders'
 
-const AskQuestion = lazy(() => import('../pages/AskQuestion'))
-const Community = lazy(() => import('../pages/Community'))
-const Explore = lazy(() => import('../pages/Explore'))
-const Home = lazy(() => import('../pages/Home'))
-const NotFound = lazy(() => import('../pages/NotFound'))
-const PdfReader = lazy(() => import('../pages/PdfReader'))
-const QuestionDetails = lazy(() => import('../pages/QuestionDetails'))
-const ResourceDetails = lazy(() => import('../pages/ResourceDetails'))
-const SavedResources = lazy(() => import('../pages/SavedResources'))
-const SearchResults = lazy(() => import('../pages/SearchResults'))
-const UserProfile = lazy(() => import('../pages/UserProfile'))
-const VideoDetails = lazy(() => import('../pages/VideoDetails'))
-const UploadResource = lazy(() => import('../pages/UploadResource'))
-const Notifications = lazy(() => import('../pages/Notifications'))
-const Dashboard = lazy(() => import('../pages/Dashboard'))
-const StudentProfile = lazy(() => import('../pages/StudentProfile'))
-const EditProfile = lazy(() => import('../pages/EditProfile'))
-const Login = lazy(() => import('../pages/Login'))
-const Signup = lazy(() => import('../pages/Signup'))
-const Onboarding = lazy(() => import('../pages/Onboarding'))
+const AskQuestion = lazy(routeLoaders.askQuestion)
+const Community = lazy(routeLoaders.community)
+const Explore = lazy(routeLoaders.explore)
+const Home = lazy(routeLoaders.home)
+const NotFound = lazy(routeLoaders.notFound)
+const PdfReader = lazy(routeLoaders.pdfReader)
+const QuestionDetails = lazy(routeLoaders.questionDetails)
+const ResourceDetails = lazy(routeLoaders.resourceDetails)
+const SavedResources = lazy(routeLoaders.savedResources)
+const SearchResults = lazy(routeLoaders.searchResults)
+const UserProfile = lazy(routeLoaders.userProfile)
+const VideoDetails = lazy(routeLoaders.videoDetails)
+const UploadResource = lazy(routeLoaders.uploadResource)
+const Notifications = lazy(routeLoaders.notifications)
+const Dashboard = lazy(routeLoaders.dashboard)
+const StudentProfile = lazy(routeLoaders.studentProfile)
+const EditProfile = lazy(routeLoaders.editProfile)
+const Login = lazy(routeLoaders.login)
+const Signup = lazy(routeLoaders.signup)
+const Onboarding = lazy(routeLoaders.onboarding)
 
 function LazyPage({ children }) {
   return <Suspense fallback={<PageLoading />}>{children}</Suspense>
 }
 
 function PageLoading() {
-  return <div className="flex min-h-[calc(100svh-4rem)] items-center justify-center bg-(--color-bg) px-4" role="status" aria-label="Loading page"><Spinner label="Loading page" /></div>
+  return (
+    <div className="mx-auto w-full max-w-[1260px] animate-pulse px-5 py-8 sm:px-8 lg:px-10" role="status" aria-label="Loading page">
+      <div className="h-8 w-2/5 rounded-lg bg-[var(--color-surface-muted)]" />
+      <div className="mt-3 h-4 w-3/5 rounded bg-[var(--color-surface-muted)]" />
+      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3].map((item) => <div key={item} className="h-40 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]" />)}
+      </div>
+    </div>
+  )
+}
+
+function CanonicalHomePage() {
+  const { status, user } = useAuth()
+
+  if (status === 'authenticated' && !user?.profile?.onboarding_completed) {
+    return <Navigate to="/onboarding" replace />
+  }
+
+  return <LazyPage><Home /></LazyPage>
 }
 
 function AppRoutes() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AuthGate>
-          <Routes>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AuthGate>
+            <Routes>
             <Route path="login" element={<PublicOnlyRoute><LazyPage><Login /></LazyPage></PublicOnlyRoute>} />
             <Route path="signup" element={<PublicOnlyRoute><LazyPage><Signup /></LazyPage></PublicOnlyRoute>} />
             <Route path="onboarding" element={<ProtectedRoute><LazyPage><Onboarding /></LazyPage></ProtectedRoute>} />
             <Route element={<AppLayout />}>
-              <Route index element={<LazyPage><Home /></LazyPage>} />
-              <Route path="home" element={<ProtectedRoute><LazyPage><Home /></LazyPage></ProtectedRoute>} />
+              <Route index element={<CanonicalHomePage />} />
+              <Route path="home" element={<ProtectedRoute><Navigate to="/" replace /></ProtectedRoute>} />
               <Route path="explore" element={<LazyPage><Explore /></LazyPage>} />
               <Route path="resources/:slug/read" element={<LazyPage><PdfReader /></LazyPage>} />
               <Route path="resources/:slug" element={<LazyPage><ResourceDetails /></LazyPage>} />
@@ -66,9 +88,10 @@ function AppRoutes() {
               <Route path="community/questions/:slug" element={<LazyPage><QuestionDetails /></LazyPage>} />
               <Route path="*" element={<LazyPage><NotFound /></LazyPage>} />
             </Route>
-          </Routes>
-        </AuthGate>
-      </AuthProvider>
+            </Routes>
+          </AuthGate>
+        </AuthProvider>
+      </QueryClientProvider>
     </BrowserRouter>
   )
 }
