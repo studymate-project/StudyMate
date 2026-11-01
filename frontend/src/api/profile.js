@@ -5,7 +5,7 @@ import { listAllResources, listAllSavedResources } from './resources'
 import { listAllVideos } from './videos'
 import { listAnswersByAuthor, listQuestions } from './questions'
 import { queryClient, QUERY_STALE_TIMES } from '../query/queryClient'
-import { profileKeys, subjectKeys } from '../query/queryKeys'
+import { profileKeys } from '../query/queryKeys'
 
 export function clearCurrentProfileCache() {
   queryClient.invalidateQueries({ queryKey: [...profileKeys.all, 'current'], refetchType: 'active' })
@@ -268,7 +268,6 @@ export function updateProfile(username, payload) {
     .patch(`/users/${encodeURIComponent(username)}/`, payload)
     .then((response) => {
       clearCurrentProfileCache()
-      queryClient.invalidateQueries({ queryKey: subjectKeys.all })
       queryClient.invalidateQueries({ queryKey: profileKeys.public(username.toLowerCase()) })
       return response.data
     })

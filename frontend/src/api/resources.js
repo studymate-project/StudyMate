@@ -1,6 +1,6 @@
 import { apiClient } from './client.js'
 import { queryClient, QUERY_STALE_TIMES } from '../query/queryClient.js'
-import { resourceKeys, subjectKeys } from '../query/queryKeys.js'
+import { resourceKeys } from '../query/queryKeys.js'
 
 const resourceTypeLabels = {
   file: 'File',
@@ -168,25 +168,12 @@ export function listResources(params = {}) {
   return request
 }
 
-export function fetchSubjectRecommendations(limit = 12) {
-  return apiClient.get('/resources/subjects/', { params: { limit } }).then((response) => response.data)
-}
-
-export function listSubjectRecommendations(limit = 12, scope = 'public') {
-  return queryClient.fetchQuery({
-    queryKey: subjectKeys.recommendations(scope, limit),
-    queryFn: () => fetchSubjectRecommendations(limit),
-    staleTime: QUERY_STALE_TIMES.subjects,
-  })
-}
-
-export function clearResourceListCache({ includeSubjects = false } = {}) {
+export function clearResourceListCache() {
   resourceRequests.clear()
   savedResourceRequests.clear()
   queryClient.invalidateQueries({ queryKey: resourceKeys.lists(), refetchType: 'active' })
   queryClient.invalidateQueries({ queryKey: resourceKeys.savedLists(), refetchType: 'active' })
   queryClient.invalidateQueries({ queryKey: resourceKeys.details() })
-  if (includeSubjects) queryClient.invalidateQueries({ queryKey: subjectKeys.all })
 }
 
 export function createResource(formData, uploadId) {
@@ -196,7 +183,7 @@ export function createResource(formData, uploadId) {
       headers: uploadId ? { 'X-Upload-ID': uploadId } : undefined,
     })
     .then((response) => {
-      clearResourceListCache({ includeSubjects: true })
+      clearResourceListCache()
       return response.data
     })
 }

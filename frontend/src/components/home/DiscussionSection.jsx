@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getApiErrorMessage } from '../../api'
 import { fetchQuestionList } from '../../api/questions'
 import Button from '../common/Button'
+import HorizontalScroller from '../common/HorizontalScroller'
 import { DiscussionGridSkeleton } from '../common/Skeletons'
 import { QUERY_STALE_TIMES } from '../../query/queryClient'
 import { questionKeys } from '../../query/queryKeys'
@@ -41,16 +42,18 @@ function DiscussionSection({ deferUntilVisible = false }) {
   const discussions = query.data?.questions?.slice(0, 3) || []
 
   return (
-    <section ref={sectionRef} className="bg-[var(--color-band)]">
+    <section ref={sectionRef} className="min-w-0 overflow-x-clip bg-[var(--color-band)]">
       <div className="section-inner py-10 sm:py-12">
         <h2 className="section-title">What Students Are Discussing</h2>
         <p className="section-copy">Join the conversation - ask questions, share insights</p>
-        {query.isPending ? <DiscussionGridSkeleton /> : null}
+        {query.isPending ? <DiscussionGridSkeleton horizontal /> : null}
         {!query.isPending && query.error && !discussions.length ? <p className="mt-6 text-sm font-black text-[var(--color-text)]" role="alert">{getApiErrorMessage(query.error)}</p> : null}
         {!query.isPending && query.error && discussions.length ? <p className="mt-6 text-sm text-[var(--color-text)]" role="alert">We couldn&apos;t refresh discussions. Showing the latest available results.</p> : null}
-        {!query.isPending && discussions.length ? <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-3">
-          {discussions.map((discussion) => <DiscussionCard key={discussion.id} discussion={discussion} />)}
-        </div> : null}
+        {!query.isPending && discussions.length ? (
+          <HorizontalScroller className="mt-6" ariaLabel="discussions">
+            {discussions.map((discussion) => <div key={discussion.id} className="w-[min(82vw,340px)] shrink-0 snap-start sm:w-[340px] lg:w-[360px]"><DiscussionCard discussion={discussion} /></div>)}
+          </HorizontalScroller>
+        ) : null}
         {!query.isPending && !query.error && !discussions.length ? <p className="mt-6 text-sm text-[var(--color-text)]">No discussions are available yet.</p> : null}
         <Button to="/community" className="mt-8">
           View All Discussions

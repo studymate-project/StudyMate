@@ -107,8 +107,8 @@ function Explore() {
   const videoError = showVideos ? videoQuery.error : null
 
   return (
-    <div className="mx-auto w-full max-w-315">
-      <section className="min-w-0 px-5 py-8 sm:px-8 lg:px-10">
+    <div className="site-container">
+      <section className="min-w-0 py-8">
         <h1 className="text-3xl font-black text-white sm:text-4xl">Explore Study Resources</h1>
 
         <div className="mt-7 flex w-full max-w-xl items-center gap-2" role="tablist" aria-label="Content type">

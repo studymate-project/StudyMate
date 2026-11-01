@@ -27,11 +27,6 @@ export const questionKeys = {
   authorAnswers: (userId, params = {}) => [...questionKeys.all, 'author-answers', userId, params],
 }
 
-export const subjectKeys = {
-  all: ['subjects'],
-  recommendations: (scope, limit) => [...subjectKeys.all, 'recommendations', scope, limit],
-}
-
 export const profileKeys = {
   all: ['profiles'],
   current: (userId) => [...profileKeys.all, 'current', userId],

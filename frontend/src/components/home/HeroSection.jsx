@@ -19,7 +19,7 @@ function HeroSection() {
           <span><strong>Community Q&amp;A</strong><small>Learn together</small></span>
         </div>
       </div>
-      <div className="hero-content mx-auto flex min-h-[370px] max-w-[1260px] flex-col items-center justify-center px-5 py-14 text-center sm:px-6 lg:px-10">
+      <div className="site-container hero-content flex min-h-[370px] flex-col items-center justify-center py-14 text-center">
         <h1 className="hero-heading max-w-4xl text-4xl font-black leading-[0.98] text-white sm:text-6xl lg:text-7xl">
           <span className="hero-word hero-word-learn">Learn.</span>{' '}
           <span className="hero-word hero-word-share">Share.</span>

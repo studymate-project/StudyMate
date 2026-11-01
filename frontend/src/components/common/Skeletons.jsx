@@ -16,9 +16,9 @@ export function ResourceCardSkeleton() {
   </article>
 }
 
-export function ResourceGridSkeleton({ count = 4 }) {
-  return <SkeletonStatus label="Loading resources" className="col-span-full grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-    {Array.from({ length: count }, (_, index) => <ResourceCardSkeleton key={index} />)}
+export function ResourceGridSkeleton({ count = 4, horizontal = false }) {
+  return <SkeletonStatus label="Loading resources" className={horizontal ? 'horizontal-scroll flex min-w-0 max-w-full gap-5 overflow-x-auto px-1 pb-4 pt-1' : 'col-span-full grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4'}>
+    {Array.from({ length: count }, (_, index) => <div key={index} className={horizontal ? 'w-[min(82vw,300px)] shrink-0 sm:w-[280px] lg:w-[290px]' : ''}><ResourceCardSkeleton /></div>)}
   </SkeletonStatus>
 }
 
@@ -41,9 +41,9 @@ export function VideoCardSkeleton() {
   </article>
 }
 
-export function VideoGridSkeleton({ count = 6 }) {
-  return <SkeletonStatus label="Loading videos" className="mt-4 grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-    {Array.from({ length: count }, (_, index) => <VideoCardSkeleton key={index} />)}
+export function VideoGridSkeleton({ count = 6, horizontal = false }) {
+  return <SkeletonStatus label="Loading videos" className={horizontal ? 'horizontal-scroll flex min-w-0 max-w-full gap-5 overflow-x-auto px-1 pb-4 pt-1' : 'mt-4 grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'}>
+    {Array.from({ length: count }, (_, index) => <div key={index} className={horizontal ? 'w-[min(82vw,340px)] shrink-0 sm:w-[340px] lg:w-[360px]' : ''}><VideoCardSkeleton /></div>)}
   </SkeletonStatus>
 }
 
@@ -59,22 +59,16 @@ export function QuestionListSkeleton({ count = 5 }) {
   return <SkeletonStatus label="Loading questions" className="space-y-3">{Array.from({ length: count }, (_, index) => <QuestionCardSkeleton key={index} />)}</SkeletonStatus>
 }
 
-export function DiscussionGridSkeleton({ count = 3 }) {
-  return <SkeletonStatus label="Loading discussions" className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-3">
-    {Array.from({ length: count }, (_, index) => <article key={index} className="min-h-[210px] border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5"><Skeleton className="h-10 w-10 rounded-lg" /><Skeleton className="mt-5 h-5 w-11/12" /><Skeleton className="mt-2 h-5 w-4/5" /><Skeleton className="mt-3 h-4 w-2/5" /><div className="mt-4 flex gap-5"><Skeleton className="h-4 w-8" /><Skeleton className="h-4 w-12" /></div></article>)}
-  </SkeletonStatus>
-}
-
-export function SubjectGridSkeleton({ count = 6, compact = false }) {
-  return <SkeletonStatus label="Loading personalized subjects" className={`grid grid-cols-1 gap-5 sm:grid-cols-2 ${compact ? 'lg:grid-cols-3' : 'lg:grid-cols-3 xl:grid-cols-6'}`}>
-    {Array.from({ length: count }, (_, index) => <article key={index} className="min-h-[88px] rounded-xl bg-[var(--color-surface-muted)] p-5"><div className="flex gap-2"><Skeleton className="mt-1 h-5 w-5 rounded-full" /><div className="flex-1"><Skeleton className="h-5 w-3/4" /><Skeleton className="mt-3 h-4 w-1/2" /></div></div></article>)}
+export function DiscussionGridSkeleton({ count = 3, horizontal = false }) {
+  return <SkeletonStatus label="Loading discussions" className={horizontal ? 'horizontal-scroll flex min-w-0 max-w-full gap-5 overflow-x-auto px-1 pb-4 pt-1' : 'mt-6 grid grid-cols-1 gap-5 md:grid-cols-3'}>
+    {Array.from({ length: count }, (_, index) => <article key={index} className={`${horizontal ? 'w-[min(82vw,340px)] shrink-0 sm:w-[340px] lg:w-[360px]' : ''} min-h-[210px] border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5`}><Skeleton className="h-10 w-10 rounded-lg" /><Skeleton className="mt-5 h-5 w-11/12" /><Skeleton className="mt-2 h-5 w-4/5" /><Skeleton className="mt-3 h-4 w-2/5" /><div className="mt-4 flex gap-5"><Skeleton className="h-4 w-8" /><Skeleton className="h-4 w-12" /></div></article>)}
   </SkeletonStatus>
 }
 
 export function ProfilePageSkeleton() {
   return <SkeletonStatus label="Loading profile">
-    <section className="bg-[var(--color-band)] px-5 py-8 sm:px-8 lg:px-10"><div className="mx-auto max-w-[1260px]"><div className="flex flex-col gap-5 sm:flex-row sm:items-start"><Skeleton className="h-16 w-16 shrink-0 rounded-full" /><div className="flex-1"><Skeleton className="h-7 w-48" /><Skeleton className="mt-2 h-4 w-40" /><Skeleton className="mt-3 h-4 w-64 max-w-full" /></div></div><div className="mt-7 grid grid-cols-2 gap-5 sm:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="flex flex-col items-center"><Skeleton className="h-6 w-12" /><Skeleton className="mt-2 h-3 w-20" /></div>)}</div></div></section>
-    <main className="mx-auto min-h-[calc(100svh-26rem)] w-full max-w-[1260px] px-5 py-7 sm:px-8"><Skeleton className="h-5 w-2/3" /><div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]"><section><Skeleton className="h-4 w-24" /><div className="mt-3 space-y-3"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div></section><aside className="space-y-6"><Skeleton className="h-24 w-full" /><Skeleton className="h-32 w-full" /></aside></div></main>
+    <section className="bg-[var(--color-band)] py-8"><div className="site-container"><div className="flex flex-col gap-5 sm:flex-row sm:items-start"><Skeleton className="h-16 w-16 shrink-0 rounded-full" /><div className="flex-1"><Skeleton className="h-7 w-48" /><Skeleton className="mt-2 h-4 w-40" /><Skeleton className="mt-3 h-4 w-64 max-w-full" /></div></div><div className="mt-7 grid grid-cols-2 gap-5 sm:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="flex flex-col items-center"><Skeleton className="h-6 w-12" /><Skeleton className="mt-2 h-3 w-20" /></div>)}</div></div></section>
+    <main className="site-container min-h-[calc(100svh-26rem)] py-7"><Skeleton className="h-5 w-2/3" /><div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]"><section><Skeleton className="h-4 w-24" /><div className="mt-3 space-y-3"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div></section><aside className="space-y-6"><Skeleton className="h-24 w-full" /><Skeleton className="h-32 w-full" /></aside></div></main>
   </SkeletonStatus>
 }
 

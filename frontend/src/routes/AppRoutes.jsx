@@ -35,7 +35,7 @@ function LazyPage({ children }) {
 
 function PageLoading() {
   return (
-    <div className="mx-auto w-full max-w-[1260px] animate-pulse px-5 py-8 sm:px-8 lg:px-10" role="status" aria-label="Loading page">
+    <div className="site-container animate-pulse py-8" role="status" aria-label="Loading page">
       <div className="h-8 w-2/5 rounded-lg bg-[var(--color-surface-muted)]" />
       <div className="mt-3 h-4 w-3/5 rounded bg-[var(--color-surface-muted)]" />
       <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

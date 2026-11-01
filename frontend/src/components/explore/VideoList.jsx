@@ -1,7 +1,6 @@
-import { Link } from 'react-router-dom'
 import { getApiErrorMessage } from '../../api'
 import { VideoGridSkeleton } from '../common/Skeletons'
-import YouTubePlayer from '../video/YouTubePlayer'
+import VideoCard from '../video/VideoCard'
 
 function VideoList({ videos, loading, error }) {
   return (
@@ -13,22 +12,7 @@ function VideoList({ videos, loading, error }) {
       {!loading && !error ? (
         <div className="mt-4 grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {videos.map((video) => (
-            <article key={video.id} className="flex w-full min-w-0 flex-col overflow-hidden rounded-xl bg-[var(--color-surface)]">
-              <YouTubePlayer videoId={video.youtubeVideoId} title={video.title} />
-              <div className="min-w-0 flex-1 p-3 sm:p-4">
-                <h3 className="min-h-[3.5rem] text-base font-black leading-snug text-white">
-                  <Link
-                    to={`/videos/${video.slug}`}
-                    className="rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
-                  >
-                    {video.title}
-                  </Link>
-                </h3>
-                <p className="mt-1 truncate text-sm font-black text-[var(--color-text)]">
-                  {video.subject} <span aria-hidden="true">-</span> {video.topic}
-                </p>
-              </div>
-            </article>
+            <VideoCard key={video.id} video={video} />
           ))}
         </div>
       ) : null}

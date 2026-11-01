@@ -117,8 +117,8 @@ function SearchResults() {
 
   return (
     <div>
-      <section className="bg-[var(--color-band)] px-5 py-8 sm:px-8 lg:px-10">
-        <div className="mx-auto max-w-[1260px]">
+      <section className="bg-[var(--color-band)] py-8">
+        <div className="site-container">
           <form onSubmit={submit} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_110px_100px]">
             <label className="relative min-w-0">
               <span className="sr-only">Search resources, videos, questions, and users</span>
@@ -144,8 +144,8 @@ function SearchResults() {
         </div>
       </section>
 
-      <div className="mx-auto max-w-[1260px]">
-        <section className="min-w-0 px-5 py-7 sm:px-8">
+      <div className="site-container">
+        <section className="min-w-0 py-7">
           {!urlQuery && <div className="border-2 border-dashed border-[var(--color-border)] px-5 py-12 text-center text-sm font-black text-[var(--color-text)]">Enter a search term to find study resources, videos, questions, or users.</div>}
           {urlQuery && <SearchResultContent key={urlQuery} query={urlQuery} />}
         </section>

@@ -55,7 +55,7 @@ function Navbar() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-nav)]">
-      <div className="mx-auto flex min-h-16 w-full max-w-[1260px] items-center gap-4 px-4 sm:px-6 lg:px-10">
+      <div className="site-container flex min-h-16 items-center gap-4">
         <NavLink
           to="/"
           className="mr-2 text-xl font-bold tracking-wide text-[var(--color-primary-light)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-focus)]"
@@ -94,8 +94,8 @@ function Navbar() {
       </div>
 
       {menuOpen ? (
-        <div className="border-t border-[var(--color-border)] bg-[var(--color-nav)] px-4 py-4 md:hidden">
-          <div className="mx-auto flex max-w-[1260px] flex-col gap-3">
+        <div className="border-t border-[var(--color-border)] bg-[var(--color-nav)] py-4 md:hidden">
+          <div className="site-container flex flex-col gap-3">
             <SearchBar placeholder="Search anything..." />
             <nav className="grid grid-cols-2 gap-2" aria-label="Mobile navigation">
               {navItems.map((item) => (

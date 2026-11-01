@@ -10,8 +10,8 @@ function ProfileHeader({
   onAvatarFile = null,
   onAvatarUrl = null,
 }) {
-  return <section className="bg-[var(--color-band)] px-5 py-8 sm:px-8 lg:px-10">
-    <div className="mx-auto max-w-[1260px]">
+  return <section className="bg-[var(--color-band)] py-8">
+    <div className="site-container">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
         <AvatarPicker
           user={user}

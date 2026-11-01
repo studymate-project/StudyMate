@@ -32,8 +32,8 @@ function Community() {
 
   return (
     <div>
-      <section className="bg-[var(--color-hero)] px-5 py-7 sm:px-8 lg:px-10">
-        <div className="mx-auto flex max-w-[1260px] flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="bg-[var(--color-hero)] py-7">
+        <div className="site-container flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-black text-white">Student Community</h1>
             <p className="mt-2 font-black text-white/90">Ask questions, share knowledge, and learn together.</p>
@@ -42,7 +42,7 @@ function Community() {
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-[1260px] gap-7 px-5 py-5 sm:px-8 lg:grid-cols-[minmax(0,1fr)_310px] lg:px-10">
+      <div className="site-container grid gap-7 py-5 lg:grid-cols-[minmax(0,1fr)_310px]">
         <main className="min-w-0">
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Community question filters">
             {tabs.map((tab) => (

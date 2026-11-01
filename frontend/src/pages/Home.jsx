@@ -1,16 +1,18 @@
 import DiscussionSection from '../components/home/DiscussionSection'
+import ExternalLinksSection from '../components/home/ExternalLinksSection'
 import HeroSection from '../components/home/HeroSection'
 import HowStudyMateWorks from '../components/home/HowStudyMateWorks'
-import PopularSubjects from '../components/home/PopularSubjects'
 import TrendingResources from '../components/home/TrendingResources'
+import VideosSection from '../components/home/VideosSection'
 
 function Home() {
   return (
     <>
       <HeroSection />
-      <PopularSubjects />
       <TrendingResources />
       <DiscussionSection deferUntilVisible />
+      <VideosSection />
+      <ExternalLinksSection />
       <HowStudyMateWorks />
     </>
   )

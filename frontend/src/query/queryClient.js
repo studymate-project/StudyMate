@@ -3,7 +3,6 @@ import { QueryClient } from '@tanstack/react-query'
 export const QUERY_STALE_TIMES = {
   lists: 60 * 1000,
   details: 2 * 60 * 1000,
-  subjects: 10 * 60 * 1000,
   profile: 60 * 1000,
 }
 
