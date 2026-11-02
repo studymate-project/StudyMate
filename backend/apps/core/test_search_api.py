@@ -140,6 +140,33 @@ class UnifiedSearchAPITests(TestCase):
         ]
         self.assertEqual(tied_ids, [tied_higher.pk, tied_lower.pk])
 
+    def test_search_ranks_resource_description_matches_above_classification_matches(self):
+        description_match = self.create_resource(
+            title="General study guide",
+            description="A practical guide to spectral analysis and signal processing.",
+            subject="Physics",
+        )
+        classification_match = self.create_resource(
+            title="General reference",
+            description="Unrelated material",
+            subject="Spectral methods",
+        )
+
+        response = self.client.get("/api/search/?q=spectral%20analysis")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        resource_ids = [
+            result["id"] for result in response.data["results"] if result["type"] == "resource"
+        ]
+        self.assertEqual(resource_ids[:2], [description_match.pk, classification_match.pk])
+
+        partial_response = self.client.get("/api/search/?q=analysi")
+        self.assertEqual(partial_response.status_code, 200, partial_response.data)
+        self.assertIn(
+            ("resource", description_match.pk),
+            {(result["type"], result["id"]) for result in partial_response.data["results"]},
+        )
+
     def test_search_supports_trigram_typo_matches(self):
         resource = self.create_resource(title="Pyhton")
 

@@ -11,7 +11,6 @@ import { QUERY_STALE_TIMES } from '../query/queryClient'
 import { questionKeys } from '../query/queryKeys'
 
 const tabs = ['Latest', 'Trending', 'Unanswered', 'Popular']
-const topics = ['Java', 'DSA', 'DBMS', 'OS', 'React', 'Python']
 
 function Community() {
   const [activeTab, setActiveTab] = useState('Latest')
@@ -64,21 +63,7 @@ function Community() {
             {!loading && !error ? visibleQuestions.map((question) => <CommunityQuestionCard key={question.id} question={question} />) : null}
           </section>
         </main>
-
-        <aside className="space-y-5">
-          <section className="border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-            <h2 className="font-black text-white">Trending Topics</h2>
-            <div className="mt-3 h-px bg-[var(--color-border-strong)]" />
-            <div className="mt-3 flex flex-wrap gap-2">
-              {topics.map((topic) => (
-                <Link key={topic} to={`/explore?subject=${topic.toLowerCase()}`} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-base font-black text-[var(--color-text)] hover:bg-[var(--color-blue-hover)]">
-                  #{topic}
-                </Link>
-              ))}
-            </div>
-          </section>
-
-        </aside>
+        
       </div>
     </div>
   )

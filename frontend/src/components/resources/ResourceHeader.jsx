@@ -100,7 +100,7 @@ function ResourceHeader({ resource, author, onDownloadCountChange, descriptionCo
         </div>
       </div>
 
-      {descriptionContent || <p className="mt-6 max-w-4xl text-base font-black leading-snug text-white/90">{resource.description}</p>}
+      {descriptionContent || <p className="mt-6 max-w-4xl whitespace-pre-wrap break-words text-base font-black leading-snug text-white/90">{resource.description}</p>}
 
       <div className="mt-6 flex flex-wrap gap-3">
         <Button to={`/resources/${resource.slug}/read`}>

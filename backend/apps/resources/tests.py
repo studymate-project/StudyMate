@@ -172,6 +172,39 @@ class ResourceFileValidationTests(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
+    def test_upload_classification_fields_are_optional(self):
+        serializer = ResourceSerializer(
+            data={
+                "title": "Unclassified resource",
+                "description": "Explain the resource naturally here.",
+                "resource_type": Resource.ResourceType.NOTES,
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        resource = serializer.save(uploader=self._create_user("unclassified-resource-owner"))
+
+        self.assertEqual(resource.subject, "")
+        self.assertEqual(resource.topic, "")
+        self.assertEqual(resource.course, "")
+        self.assertEqual(resource.semester, "")
+
+    def test_resource_description_preserves_multiline_text(self):
+        description = "Single line.\nSecond line.\n\nFourth line.\n" + ("Long explanation.\n" * 100)
+        serializer = ResourceSerializer(
+            data={
+                "title": "Multiline resource",
+                "description": description,
+                "resource_type": Resource.ResourceType.NOTES,
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["description"], description)
+        resource = serializer.save(uploader=self._create_user("multiline-resource-owner"))
+
+        self.assertEqual(resource.description, description)
+
     def test_unauthorized_upload_and_update_are_rejected(self):
         owner = self._create_user("resource-owner")
         other_user = self._create_user("resource-other")
@@ -240,8 +273,6 @@ class VideoPublishingTests(TestCase):
             {
                 "title": "Published video",
                 "description": "A test video",
-                "subject": "Physics",
-                "topic": "Motion",
                 "youtube_url": "https://www.youtube.com/watch?v=I9R9BhhuPlY",
             },
             format="json",
@@ -250,6 +281,10 @@ class VideoPublishingTests(TestCase):
         self.assertEqual(response.status_code, 201, response.data)
         video = Video.objects.get(pk=response.data["id"])
         self.assertEqual(video.status, PublicationStatus.PUBLISHED)
+        self.assertEqual(video.subject, "")
+        self.assertEqual(video.topic, "")
+        self.assertEqual(video.course, "")
+        self.assertEqual(video.semester, "")
 
         listed = APIClient().get("/api/videos/")
 

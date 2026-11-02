@@ -44,8 +44,8 @@ function DiscussionSection({ deferUntilVisible = false }) {
   return (
     <section ref={sectionRef} className="min-w-0 overflow-x-clip bg-[var(--color-band)]">
       <div className="section-inner py-10 sm:py-12">
-        <h2 className="section-title">What Students Are Discussing</h2>
-        <p className="section-copy">Join the conversation - ask questions, share insights</p>
+        <h2 className="section-title">Discussions</h2>
+        
         {query.isPending ? <DiscussionGridSkeleton horizontal /> : null}
         {!query.isPending && query.error && !discussions.length ? <p className="mt-6 text-sm font-black text-[var(--color-text)]" role="alert">{getApiErrorMessage(query.error)}</p> : null}
         {!query.isPending && query.error && discussions.length ? <p className="mt-6 text-sm text-[var(--color-text)]" role="alert">We couldn&apos;t refresh discussions. Showing the latest available results.</p> : null}

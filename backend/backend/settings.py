@@ -731,6 +731,7 @@ REST_FRAMEWORK = {
             'THROTTLE_AUTH_SIGNUP_VERIFICATION_VERIFY_RATE', default='30/hour'
         ),
         'auth_refresh': env('THROTTLE_AUTH_REFRESH_RATE', default='60/minute'),
+        'auth_logout': env('THROTTLE_AUTH_LOGOUT_RATE', default='60/minute'),
         'resource_write': env('THROTTLE_RESOURCE_WRITE_RATE', default='60/hour'),
         'question_write': env('THROTTLE_QUESTION_WRITE_RATE', default='60/hour'),
         'answer_write': env('THROTTLE_ANSWER_WRITE_RATE', default='120/hour'),

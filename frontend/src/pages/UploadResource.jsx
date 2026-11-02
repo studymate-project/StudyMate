@@ -14,15 +14,11 @@ import { parseYouTubeUrl } from '../utils/youtubeUtils'
 const initialForm = {
   title: '',
   description: '',
-  subject: '',
-  topic: '',
-  course: '',
-  semester: '',
   selectedType: 'File',
   youtubeUrl: '',
   externalUrl: '',
 }
-const requiredFields = ['title', 'description', 'subject', 'topic', 'course', 'semester']
+const requiredFields = ['title', 'description']
 const draftKey = 'studymate-upload-draft'
 const resourceTypeMap = { File: 'file', Link: 'link' }
 
@@ -35,7 +31,14 @@ function loadDraft() {
   try {
     const draft = JSON.parse(localStorage.getItem(draftKey) || '{}')
     const selectedType = ['File', 'Video', 'Link'].includes(draft.selectedType) ? draft.selectedType : initialForm.selectedType
-    return { ...initialForm, ...draft, selectedType }
+    return {
+      ...initialForm,
+      title: typeof draft.title === 'string' ? draft.title : '',
+      description: typeof draft.description === 'string' ? draft.description : '',
+      selectedType,
+      youtubeUrl: typeof draft.youtubeUrl === 'string' ? draft.youtubeUrl : '',
+      externalUrl: typeof draft.externalUrl === 'string' ? draft.externalUrl : '',
+    }
   } catch {
     return initialForm
   }
@@ -109,11 +112,7 @@ function UploadResource() {
       try {
         const video = await createVideo({
           title: form.title.trim(),
-          description: form.description.trim(),
-          subject: form.subject.trim(),
-          topic: form.topic.trim(),
-          course: form.course.trim(),
-          semester: form.semester.trim(),
+          description: form.description,
           youtube_url: form.youtubeUrl.trim(),
         })
         setCreatedResource({ ...video, kind: 'video' })
@@ -134,11 +133,7 @@ function UploadResource() {
 
     const formData = new FormData()
     formData.append('title', form.title.trim())
-    formData.append('description', form.description.trim())
-    formData.append('subject', form.subject.trim())
-    formData.append('topic', form.topic.trim())
-    formData.append('course', form.course.trim())
-    formData.append('semester', form.semester.trim())
+    formData.append('description', form.description)
     formData.append('resource_type', resourceTypeMap[form.selectedType])
     if (isLink) formData.append('external_url', form.externalUrl.trim())
     if (!isLink) formData.append('file', file)
@@ -179,13 +174,7 @@ function UploadResource() {
       <form onSubmit={submit} noValidate className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_310px] lg:items-start">
         <section className="min-w-0 space-y-5">
           <Field label="Resource title" error={errors.title}><input value={form.title} onChange={(event) => updateField('title', event.target.value)} placeholder="DBMS Normalization Short Notes" className="control" /></Field>
-          <Field label="Description" error={errors.description}><textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Describe what other students will learn from this resource." className="control min-h-28 resize-y" /></Field>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <TextField label="Subject" value={form.subject} onChange={(value) => updateField('subject', value)} placeholder="DBMS, Java, DSA..." error={errors.subject} />
-            <TextField label="Topic" value={form.topic} onChange={(value) => updateField('topic', value)} placeholder="Normalization, OOP..." error={errors.topic} />
-            <TextField label="Course" value={form.course} onChange={(value) => updateField('course', value)} placeholder="B.Tech Computer Science" error={errors.course} />
-            <TextField label="Semester" value={form.semester} onChange={(value) => updateField('semester', value)} placeholder="5th Semester" error={errors.semester} />
-          </div>
+          <Field label="Description" error={errors.description}><textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Explain what this resource covers, who it is for, and how other students can use it." className="control min-h-36 resize-y" /></Field>
           <Field label="Resource type" error={errors.selectedType}><ResourceTypeSelector value={form.selectedType} onChange={setSelectedType} /></Field>
         </section>
         <aside className="space-y-4">
@@ -208,6 +197,5 @@ function LinkResourceField({ value, onChange, error }) {
 }
 
 function Field({ label, error, children }) { return <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--color-text)]">{label}</span>{children}{error ? <span className="mt-1 block text-sm font-medium text-[var(--color-danger)]">{error}</span> : null}</label> }
-function TextField({ label, value, onChange, placeholder, error }) { return <Field label={label} error={error}><input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="control" /></Field> }
 
 export default UploadResource

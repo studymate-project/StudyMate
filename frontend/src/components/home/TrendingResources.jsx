@@ -11,7 +11,7 @@ function TrendingResources() {
     <section className="page-section">
       <div className="section-inner">
         <h2 className="section-title">Resources</h2>
-        <p className="section-copy">Most viewed and downloaded this week</p>
+        
         {loading ? <ResourceGridSkeleton horizontal /> : null}
           {!loading && error && !resources.length ? <p className="text-sm font-black text-[var(--color-text)]" role="alert">{getApiErrorMessage(error)}</p> : null}
           {!loading && error && resources.length ? <p className="mt-6 text-sm text-[var(--color-text)]" role="alert">We couldn&apos;t refresh resources. Showing the latest available results.</p> : null}

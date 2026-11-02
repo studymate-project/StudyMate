@@ -150,12 +150,50 @@ def _build_similarity(spec: _SearchSpec, query: str):
     )
 
 
+def _build_text_match(field: str, query: str) -> tuple[Q, Q]:
+    """Return phrase and token matches for a searchable text field."""
+
+    phrase_match = Q(**{f"{field}__icontains": query})
+    token_match = Q()
+    for term in query.split():
+        token_match |= Q(**{f"{field}__icontains": term})
+    return phrase_match, token_match
+
+
+def _build_match_boost(field: str, query: str, phrase_score: float, token_score: float):
+    phrase_match, token_match = _build_text_match(field, query)
+    return (
+        Case(
+            When(phrase_match, then=Value(phrase_score)),
+            default=Value(0.0),
+            output_field=FloatField(),
+        )
+        + Case(
+            When(token_match, then=Value(token_score)),
+            default=Value(0.0),
+            output_field=FloatField(),
+        )
+    ), phrase_match, token_match
+
+
 def _candidate_rows(request: Request, spec: _SearchSpec, query: str, candidate_limit: int) -> list[dict[str, Any]]:
     search_query = SearchQuery(query, config="english", search_type="websearch")
     similarity = _build_similarity(spec, query)
     trigram_match = Q(**{f"{spec.text_fields[0]}__trigram_similar": query})
     for field in spec.text_fields[1:]:
         trigram_match |= Q(**{f"{field}__trigram_similar": query})
+    title_boost, title_phrase_match, title_term_match = _build_match_boost(
+        "title", query, phrase_score=1.2, token_score=0.4
+    )
+    snippet_boost, snippet_phrase_match, snippet_term_match = _build_match_boost(
+        spec.snippet_field, query, phrase_score=0.9, token_score=0.3
+    )
+    partial_text_match = title_term_match | snippet_term_match
+    for field in spec.text_fields:
+        if field in {"title", spec.snippet_field}:
+            continue
+        _, _, field_term_match = _build_match_boost(field, query, phrase_score=0.0, token_score=0.0)
+        partial_text_match |= field_term_match
     fts_rank = SearchRank(
         F("search_vector"),
         search_query,
@@ -165,7 +203,7 @@ def _candidate_rows(request: Request, spec: _SearchSpec, query: str, candidate_l
         cover_density=True,
     )
     score = ExpressionWrapper(
-        fts_rank + similarity * Value(0.25),
+        fts_rank + similarity * Value(0.25) + title_boost + snippet_boost,
         output_field=FloatField(),
     )
     fields = ["pk", "slug", "title", spec.snippet_field, "created_at", *spec.metadata_fields]
@@ -173,7 +211,7 @@ def _candidate_rows(request: Request, spec: _SearchSpec, query: str, candidate_l
         _visible_queryset(request, spec)
         .annotate(_trigram_similarity=similarity)
         .annotate(_search_score=score)
-        .filter(Q(search_vector=search_query) | trigram_match)
+        .filter(Q(search_vector=search_query) | trigram_match | partial_text_match)
         .order_by("-_search_score", "-created_at", "-pk")
         .values(*fields, "_search_score")[:candidate_limit]
     )

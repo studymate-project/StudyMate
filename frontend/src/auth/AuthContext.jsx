@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { clearClientAuthState, getCurrentUser, login, logout, restoreSession, signup } from '../api/auth'
-import { resetRefreshState, setAuthFailureHandler } from '../api/client'
+import { setAuthFailureHandler } from '../api/client'
+import { shouldAutoLogout } from '../api/authFlow'
 import { AuthContext } from './context'
 import { getLoginState } from './navigation'
 
@@ -23,18 +24,19 @@ export function AuthProvider({ children }) {
       if (sessionInvalidated.current) return
       sessionInvalidated.current = true
       clearClientAuthState()
-      resetRefreshState()
       setUser(null)
       setStatus('unauthenticated')
       setInitializationError(null)
-      void logout().catch(() => {})
+      if (shouldAutoLogout({ status, user })) {
+        void logout().catch(() => {})
+      }
       if (location.pathname !== '/login' && location.pathname !== '/signup') {
         navigate('/login', { replace: true, state: getLoginState(location) })
       }
     }
 
     return setAuthFailureHandler(handleAuthFailure)
-  }, [location, navigate])
+  }, [location, navigate, status, user])
 
   useEffect(() => {
     let active = true

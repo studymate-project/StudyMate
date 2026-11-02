@@ -21,7 +21,7 @@ function VideosSection() {
     <section className="page-section">
       <div className="section-inner">
         <h2 className="section-title">Videos</h2>
-        <p className="section-copy">Learn from videos shared by StudyMate students</p>
+        {/* <p className="section-copy">Learn from videos shared by StudyMate students</p> */}
         {query.isPending ? <VideoGridSkeleton horizontal /> : null}
         {!query.isPending && query.error && !videos.length ? <p className="mt-6 text-sm font-black text-[var(--color-text)]" role="alert">{getApiErrorMessage(query.error)}</p> : null}
         {!query.isPending && query.error && videos.length ? <p className="mt-6 text-sm text-[var(--color-text)]" role="alert">We couldn&apos;t refresh videos. Showing the latest available results.</p> : null}

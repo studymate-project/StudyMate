@@ -163,10 +163,6 @@ class VideoAPIYouTubeURLTests(TestCase):
                 {"subject": "Physics", "youtube_url": "https://youtu.be/dQw4w9WgXcQ"},
                 "title",
             ),
-            (
-                {"title": "Missing subject", "youtube_url": "https://youtu.be/dQw4w9WgXcQ"},
-                "subject",
-            ),
         )
 
         for payload, field in invalid_payloads:
@@ -714,7 +710,7 @@ class APIFoundationTests(TestCase):
         schema = SchemaGenerator().get_schema(request=None, public=True)
 
         resource_request = schema["components"]["schemas"]["ResourceRequest"]
-        self.assertEqual(set(resource_request["required"]), {"resource_type", "subject", "title"})
+        self.assertEqual(set(resource_request["required"]), {"resource_type", "title"})
         self.assertNotIn("uploader", resource_request["properties"])
         self.assertNotIn("status", resource_request["properties"])
 
@@ -1588,8 +1584,8 @@ class APIViewTests(TestCase):
         result_ids = [item["id"] for item in response.data["results"]]
         self.assertEqual(result_ids.count(tag_match.pk), 1)
         self.assertEqual(result_ids[0], title_match.pk)
-        self.assertLess(result_ids.index(subject_match.pk), result_ids.index(description_match.pk))
-        self.assertLess(result_ids.index(topic_match.pk), result_ids.index(description_match.pk))
+        self.assertLess(result_ids.index(description_match.pk), result_ids.index(subject_match.pk))
+        self.assertLess(result_ids.index(description_match.pk), result_ids.index(topic_match.pk))
         self.assertLess(result_ids.index(description_match.pk), result_ids.index(tag_match.pk))
 
     def test_resource_search_uses_latest_as_tie_breaker(self):
@@ -3018,11 +3014,6 @@ class APIViewTests(TestCase):
                 "title",
             ),
             (
-                "missing subject",
-                {"title": "Missing subject", "resource_type": Resource.ResourceType.NOTES},
-                "subject",
-            ),
-            (
                 "invalid resource type",
                 {"title": "Invalid type", "subject": "Physics", "resource_type": "invalid"},
                 "resource_type",
@@ -3056,6 +3047,25 @@ class APIViewTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["question"], self.question.pk)
         self.assertEqual(response.data["author"]["username"], "api-peer")
+
+    def test_answer_body_preserves_multiline_text(self):
+        answer_bodies = (
+            "Single line.",
+            "First line.\nSecond line.",
+            "First paragraph.\n\nSecond paragraph.",
+            "Long answer.\n" * 100,
+        )
+        self.client.force_authenticate(user=self.other_user)
+
+        for index, body in enumerate(answer_bodies):
+            with self.subTest(index=index):
+                response = self.client.post(
+                    f"/api/questions/{self.question.pk}/answers/", {"body": body}, format="json"
+                )
+
+                self.assertEqual(response.status_code, 201, response.data)
+                self.assertEqual(response.data["body"], body)
+                self.assertEqual(Answer.objects.get(pk=response.data["id"]).body, body)
 
     def test_answer_creation_notifies_question_author(self):
         self.client.force_authenticate(user=self.other_user)

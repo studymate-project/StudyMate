@@ -11,6 +11,7 @@ from rest_framework.generics import CreateAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
@@ -246,6 +247,7 @@ class LoginView(APIView):
     """Authenticate by email and place JWTs in secure HTTP-only cookies."""
 
     permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
     throttle_scope = "auth_login"
 
     @staticmethod
@@ -330,6 +332,9 @@ class RefreshView(APIView):
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
+    # Refresh has its own abuse limit. Do not also charge it to the generic
+    # anonymous bucket shared by public reads such as the question list.
+    throttle_classes = (ScopedRateThrottle,)
     throttle_scope = "auth_refresh"
 
     @staticmethod
@@ -345,6 +350,23 @@ class RefreshView(APIView):
             domain=settings.JWT_COOKIE_DOMAIN,
         )
 
+    @staticmethod
+    def _invalid_refresh_response():
+        response = Response({"detail": "Invalid or expired refresh token."}, status=status.HTTP_401_UNAUTHORIZED)
+        response.delete_cookie(
+            settings.JWT_ACCESS_COOKIE_NAME,
+            path=settings.JWT_ACCESS_COOKIE_PATH,
+            domain=settings.JWT_COOKIE_DOMAIN,
+            samesite=settings.JWT_COOKIE_SAMESITE,
+        )
+        response.delete_cookie(
+            settings.JWT_REFRESH_COOKIE_NAME,
+            path=settings.JWT_REFRESH_COOKIE_PATH,
+            domain=settings.JWT_COOKIE_DOMAIN,
+            samesite=settings.JWT_COOKIE_SAMESITE,
+        )
+        return response
+
     @extend_schema(
         summary="Refresh the access cookie",
         description="Refresh uses the existing HTTP-only refresh cookie and requires CSRF validation.",
@@ -355,7 +377,7 @@ class RefreshView(APIView):
     def post(self, request: Request) -> Response:
         raw_refresh = request.COOKIES.get(settings.JWT_REFRESH_COOKIE_NAME)
         if not raw_refresh:
-            return Response({"detail": "Invalid or expired refresh token."}, status=401)
+            return self._invalid_refresh_response()
 
         # A browser with no usable refresh token is simply logged out. Check
         # the token without rotating it before CSRF enforcement so an expired
@@ -365,7 +387,7 @@ class RefreshView(APIView):
         try:
             RefreshToken(raw_refresh)
         except TokenError:
-            return Response({"detail": "Invalid or expired refresh token."}, status=401)
+            return self._invalid_refresh_response()
 
         enforce_cookie_csrf(request)
 
@@ -373,9 +395,9 @@ class RefreshView(APIView):
         try:
             is_valid = serializer.is_valid()
         except TokenError:
-            return Response({"detail": "Invalid or expired refresh token."}, status=401)
+            return self._invalid_refresh_response()
         if not is_valid:
-            return Response({"detail": "Invalid or expired refresh token."}, status=401)
+            return self._invalid_refresh_response()
 
         token_data = serializer.validated_data
         response = Response({"detail": "Token refreshed."})
@@ -404,6 +426,8 @@ class LogoutView(APIView):
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "auth_logout"
 
     @staticmethod
     def _blacklist_refresh_token(raw_refresh):

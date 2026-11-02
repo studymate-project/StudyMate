@@ -4,7 +4,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from apps.education.models import AcademicLevel, Course, EducationBackground, Interest, StudentInterest
 from apps.users.models import StudentProfile
@@ -95,6 +95,8 @@ class AuthenticationCSRFTests(TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.data["detail"], "Invalid or expired refresh token.")
+        self.assertIn(settings.JWT_ACCESS_COOKIE_NAME, response.cookies)
+        self.assertIn(settings.JWT_REFRESH_COOKIE_NAME, response.cookies)
 
     def test_refresh_with_a_valid_cookie_still_requires_csrf(self):
         user = get_user_model().objects.get(email="csrf-user@example.com")
@@ -113,6 +115,33 @@ class AuthenticationCSRFTests(TestCase):
         response = self.client.post("/api/auth/refresh/", {}, format="json")
 
         self.assertEqual(response.status_code, 401)
+        self.assertIn(settings.JWT_ACCESS_COOKIE_NAME, response.cookies)
+        self.assertIn(settings.JWT_REFRESH_COOKIE_NAME, response.cookies)
+
+    def test_expired_access_cookie_refreshes_with_a_valid_refresh_cookie(self):
+        bootstrap = self.client.get("/api/auth/csrf/")
+        csrf_token = bootstrap.data["csrf_token"]
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {"email": "csrf-user@example.com", "password": "not-used-in-test"},
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        self.assertEqual(login_response.status_code, 200)
+
+        expired_access = AccessToken(self.client.cookies[settings.JWT_ACCESS_COOKIE_NAME].value)
+        expired_access["exp"] = 0
+        self.client.cookies[settings.JWT_ACCESS_COOKIE_NAME] = str(expired_access)
+        self.assertEqual(self.client.get("/api/auth/me/").status_code, 401)
+
+        refresh_response = self.client.post(
+            "/api/auth/refresh/",
+            {},
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        self.assertEqual(refresh_response.status_code, 200)
+        self.assertEqual(self.client.get("/api/auth/me/").status_code, 200)
 
     @override_settings(
         CORS_ALLOWED_ORIGINS=["https://studymate.vercel.app"],

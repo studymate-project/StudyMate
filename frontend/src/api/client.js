@@ -99,7 +99,9 @@ function canRefreshRequest(config) {
 }
 
 const refreshCoordinator = createRefreshCoordinator(() => (
-  apiClient.post('/auth/refresh/', null, { _authRetry: true })
+  // This request is the recovery primitive itself; it must never enter the
+  // response interceptor's refresh path if the server rejects it.
+  apiClient.post('/auth/refresh/', null, { _authRetry: true, _skipAuthRefresh: true })
 ))
 
 export function refreshAccessCookie() {

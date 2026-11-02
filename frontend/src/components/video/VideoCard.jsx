@@ -6,10 +6,10 @@ function VideoCard({ video }) {
     <article className="flex w-full min-w-0 flex-col overflow-hidden rounded-xl bg-[var(--color-surface)]">
       <YouTubePlayer videoId={video.youtubeVideoId} title={video.title} />
       <div className="min-w-0 flex-1 p-3 sm:p-4">
-        <h3 className="min-h-[3.5rem] text-base font-black leading-snug text-white">
+        <h3 className="min-h-[3.5rem] text-xl font-black leading-snug text-white">
           <Link
             to={`/videos/${video.slug}`}
-            className="rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
+            className="rounded focus-visible:outline focus-visible:outline-2 text-xl focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-light)]"
           >
             {video.title}
           </Link>

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createRefreshCoordinator, getRetryAfterMs, isRefreshEndpoint } from './authRefresh.js'
-import { restoreSessionWithRefresh } from './authFlow.js'
+import { createLogoutCoordinator, restoreSessionWithRefresh, shouldAutoLogout } from './authFlow.js'
 
 test('concurrent refresh callers share one in-flight request', async () => {
   let calls = 0
@@ -36,6 +36,26 @@ test('refresh 401 is remembered until a successful login resets the coordinator'
   coordinator.reset()
   await assert.rejects(coordinator.request(), (received) => received === error)
   assert.equal(calls, 2)
+})
+
+test('a failed refresh stays unavailable while concurrent 401 handlers finish', async () => {
+  let calls = 0
+  const error = { status: 401 }
+  const coordinator = createRefreshCoordinator(async () => {
+    calls += 1
+    throw error
+  })
+
+  const results = await Promise.allSettled([
+    coordinator.request(),
+    coordinator.request(),
+    coordinator.request(),
+  ])
+
+  assert.equal(calls, 1)
+  assert.deepEqual(results.map((result) => result.reason), [error, error, error])
+  await assert.rejects(coordinator.request(), (received) => received === error)
+  assert.equal(calls, 1)
 })
 
 test('refresh 403 is remembered so a CSRF failure cannot trigger repeated requests', async () => {
@@ -96,6 +116,50 @@ test('session restore treats missing or throttled refresh as unauthenticated', a
   assert.equal(missing, null)
   assert.equal(throttled, null)
   assert.equal(refreshCalls, 2)
+})
+
+test('logged-out session restoration makes one refresh decision and stops cleanly', async () => {
+  let userCalls = 0
+  let refreshCalls = 0
+  const restored = await restoreSessionWithRefresh({
+    getCurrentUser: async () => {
+      userCalls += 1
+      throw { status: 401 }
+    },
+    refreshSession: async () => {
+      refreshCalls += 1
+      throw { status: 401 }
+    },
+  })
+
+  assert.equal(restored, null)
+  assert.equal(userCalls, 1)
+  assert.equal(refreshCalls, 1)
+})
+
+test('concurrent automatic and explicit logout callers share one request', async () => {
+  let calls = 0
+  let resolveLogout
+  const coordinator = createLogoutCoordinator(() => {
+    calls += 1
+    return new Promise((resolve) => { resolveLogout = resolve })
+  })
+
+  const automaticLogout = coordinator.request()
+  const explicitLogout = coordinator.request()
+  assert.strictEqual(automaticLogout, explicitLogout)
+  assert.strictEqual(coordinator.wait(), automaticLogout)
+  await Promise.resolve()
+  resolveLogout({ ok: true })
+
+  await Promise.all([automaticLogout, explicitLogout])
+  assert.equal(calls, 1)
+})
+
+test('automatic logout is skipped when no authenticated session exists', () => {
+  assert.equal(shouldAutoLogout({ status: 'unauthenticated', user: null }), false)
+  assert.equal(shouldAutoLogout({ status: 'loading', user: null }), false)
+  assert.equal(shouldAutoLogout({ status: 'authenticated', user: { id: 1 } }), true)
 })
 
 test('session restore retries /me at most once and does not refresh the refresh endpoint', async () => {

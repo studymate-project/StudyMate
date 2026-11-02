@@ -1,5 +1,5 @@
 import { apiClient, refreshAccessCookie, resetRefreshState } from './client'
-import { restoreSessionWithRefresh } from './authFlow'
+import { createLogoutCoordinator, restoreSessionWithRefresh } from './authFlow'
 import { clearNotificationCache } from './notifications'
 import { clearQuestionListCache } from './questions'
 import { clearResourceListCache } from './resources'
@@ -12,6 +12,13 @@ function getUser(data) {
   return data?.user || null
 }
 
+const logoutCoordinator = createLogoutCoordinator(() => (
+  apiClient.post('/auth/logout/').then((response) => {
+    clearClientAuthState()
+    return response.data
+  })
+))
+
 export function clearClientAuthState() {
   clearQueryCache()
   clearResourceListCache()
@@ -21,6 +28,9 @@ export function clearClientAuthState() {
 
 export async function login(credentials) {
   clearClientAuthState()
+  // An automatic session cleanup may still be clearing old cookies while the
+  // user submits the login form. Let it finish before issuing new cookies.
+  await logoutCoordinator.wait().catch(() => {})
   const response = await apiClient.post('/auth/login/', credentials)
   resetRefreshState()
   return { ...response.data, user: getUser(response.data) }
@@ -84,8 +94,5 @@ export function restoreSession() {
 }
 
 export async function logout() {
-  const response = await apiClient.post('/auth/logout/')
-  resetRefreshState()
-  clearClientAuthState()
-  return response.data
+  return logoutCoordinator.request()
 }

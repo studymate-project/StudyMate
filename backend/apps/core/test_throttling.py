@@ -89,3 +89,13 @@ class APIThrottlingTests(TestCase):
         self.assertEqual(first.status_code, 201)
         self.assertEqual(second.status_code, 429)
         self.assertEqual(read.status_code, 200)
+
+    def test_refresh_has_an_isolated_scope_and_question_reads_do_not_use_write_scope(self):
+        with self.throttle_rates(anon="2/minute", auth_refresh="2/minute", auth_logout="2/minute", question_write="1/minute"):
+            refresh_responses = [self.client.post("/api/auth/refresh/", {}, format="json") for _ in range(3)]
+            question_responses = [self.client.get("/api/questions/") for _ in range(2)]
+            logout_responses = [self.client.post("/api/auth/logout/", {}, format="json") for _ in range(3)]
+
+        self.assertEqual([response.status_code for response in refresh_responses], [401, 401, 429])
+        self.assertEqual([response.status_code for response in question_responses], [200, 200])
+        self.assertEqual([response.status_code for response in logout_responses], [204, 204, 429])

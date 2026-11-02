@@ -67,8 +67,8 @@ function QuestionDetailsView({ slug }) {
   if (!question) return <QuestionMessage title="Question Not Found" message="This question may have been moved or removed." />
 
   const postAnswer = async () => {
-    const body = draft.trim()
-    if (!body || posting) return
+    const body = draft
+    if (!body.trim() || posting) return
     if (authStatus !== 'authenticated') {
       navigate('/login', { state: getLoginState(location) })
       return
@@ -150,7 +150,7 @@ function QuestionDetailsView({ slug }) {
           <section className="p-3">
             <h2 className="font-black text-white">Write an Answer</h2>
             <textarea ref={answerRef} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Share your knowledge - be clear, concise, and helpful to other students." className="mt-3 min-h-28 w-full resize-y border-1 border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4  text-white outline-none placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-primary-light)]" />
-            {preview && draft ? <div className="mt-3 border border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-sm font-bold text-white">{draft}</div> : null}
+            {preview && draft ? <div className="mt-3 whitespace-pre-wrap break-words border border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-sm font-bold text-white">{draft}</div> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button onClick={postAnswer} disabled={posting || !draft.trim()}>{posting ? 'Posting...' : 'Post Answer'}</Button>
               <Button variant="dark" onClick={() => setPreview((value) => !value)}>Preview</Button>
@@ -184,7 +184,7 @@ function AnswerCard({ answer, voteState, onToggleVote }) {
           <p className="text-sm font-black text-[var(--color-text)]">{answer.createdAt || 'Date unavailable'}</p>
         </div>
       </div>
-      <p className="mt-5 text-base font-black leading-relaxed text-white/90">{answer.body}</p>
+      <p className="mt-5 whitespace-pre-wrap break-words text-base font-black leading-relaxed text-white/90">{answer.body}</p>
       <div className="mt-5 flex flex-wrap gap-3">
         <Button variant="secondary" onClick={() => onToggleVote(answer)} disabled={currentVoteState.pending}><ThumbsUp size={18} />{currentVoteState.upvoted ? 'Upvoted' : upvoteLabel}</Button>
         {answer.isHelpful ? <span className="inline-flex min-h-11 items-center rounded-lg bg-[var(--color-surface-muted)] px-4 font-black text-[var(--color-text)]">Helpful Answer</span> : null}

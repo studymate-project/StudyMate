@@ -74,6 +74,27 @@ class ListSearchAPITests(TestCase):
         self.assertEqual(set(self.result_ids(response)), {video.pk for video in matches} | {tagged.pk})
         self.assertNotIn(non_match.pk, self.result_ids(response))
 
+    def test_resource_search_matches_description_terms_and_prioritizes_them_over_classification(self):
+        description_match = self.create_resource(
+            title="General study guide",
+            description="A practical guide to spectral analysis and signal processing.",
+            subject="Physics",
+        )
+        classification_match = self.create_resource(
+            title="General reference",
+            description="Unrelated material",
+            subject="Spectral methods",
+        )
+
+        phrase_response = self.client.get("/api/resources/", {"search": "spectral analysis"})
+        partial_response = self.client.get("/api/resources/", {"search": "analysi"})
+
+        self.assertEqual(phrase_response.status_code, 200, phrase_response.data)
+        self.assertEqual(partial_response.status_code, 200, partial_response.data)
+        phrase_ids = self.result_ids(phrase_response)
+        self.assertEqual(phrase_ids[:2], [description_match.pk, classification_match.pk])
+        self.assertIn(description_match.pk, self.result_ids(partial_response))
+
     def test_video_search_preserves_pagination_and_default_ordering(self):
         videos = [self.create_video(title=f"paged vidsearch video {index}") for index in range(21)]
         base_time = timezone.now()

@@ -28,7 +28,7 @@ function RatingControl({
         <div>
           <h2 id={`${itemLabel}-rating-title`} className="text-base font-black text-white">Rate this {itemLabel}</h2>
           <p className="mt-2 text-sm font-bold text-[var(--color-text)]">
-            {isAuthenticated ? 'Choose one to rate or update.' : 'Sign in to rate this item.'}
+            {isAuthenticated ? 'Choose one to rate.' : 'Sign in to rate this item.'}
           </p>
         </div>
         <Rating

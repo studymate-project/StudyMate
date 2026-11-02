@@ -825,26 +825,60 @@ class ResourceViewSet(ModelViewSet):
             queryset = queryset.distinct() if tag_filter_applied else queryset
             return self._apply_ordering(queryset, ordering)
 
-        title_match = Q(title__icontains=search_term)
-        subject_or_topic_match = (
-            Q(subject__icontains=search_term)
-            | Q(topic__icontains=search_term)
-            | Q(course__icontains=search_term)
-            | Q(semester__icontains=search_term)
+        search_terms = tuple(dict.fromkeys(search_term.split()))
+
+        def any_term_match(fields):
+            match = Q()
+            for term in search_terms:
+                for field in fields:
+                    match |= Q(**{f"{field}__icontains": term})
+            return match
+
+        title_phrase_match = Q(title__icontains=search_term)
+        title_term_match = any_term_match(("title",))
+        description_phrase_match = Q(description__icontains=search_term)
+        description_term_match = any_term_match(("description",))
+        classification_term_match = any_term_match(("subject", "topic", "course", "semester"))
+        tag_term_match = any_term_match(("tags__name", "tags__slug"))
+        resource_match = (
+            title_term_match
+            | description_term_match
+            | classification_term_match
+            | tag_term_match
         )
-        description_match = Q(description__icontains=search_term)
-        tag_match = Q(tags__name__icontains=search_term) | Q(tags__slug__icontains=search_term)
 
         queryset = (
-            queryset.filter(title_match | subject_or_topic_match | description_match | tag_match)
+            queryset.filter(resource_match)
             .annotate(
                 search_rank=Case(
-                    When(title_match, then=Value(4)),
-                    When(subject_or_topic_match, then=Value(3)),
-                    When(description_match, then=Value(2)),
-                    When(tag_match, then=Value(1)),
-                    default=Value(0),
-                    output_field=IntegerField(),
+                    When(title_phrase_match, then=Value(8.0)),
+                    default=Value(0.0),
+                    output_field=FloatField(),
+                )
+                + Case(
+                    When(title_term_match, then=Value(5.0)),
+                    default=Value(0.0),
+                    output_field=FloatField(),
+                )
+                + Case(
+                    When(description_phrase_match, then=Value(4.0)),
+                    default=Value(0.0),
+                    output_field=FloatField(),
+                )
+                + Case(
+                    When(description_term_match, then=Value(3.0)),
+                    default=Value(0.0),
+                    output_field=FloatField(),
+                )
+                + Case(
+                    When(classification_term_match, then=Value(1.5)),
+                    default=Value(0.0),
+                    output_field=FloatField(),
+                )
+                + Case(
+                    When(tag_term_match, then=Value(1.0)),
+                    default=Value(0.0),
+                    output_field=FloatField(),
                 )
             )
             .distinct()

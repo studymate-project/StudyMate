@@ -30,6 +30,7 @@ class TagSerializer(serializers.ModelSerializer):
 
 
 class ResourceSerializer(serializers.ModelSerializer):
+    description = serializers.CharField(max_length=5000, required=False, allow_blank=True, trim_whitespace=False)
     uploader = PublicUserSerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     views = serializers.SerializerMethodField()
@@ -76,6 +77,12 @@ class ResourceSerializer(serializers.ModelSerializer):
             "is_saved",
         )
         read_only_fields = ("id", "slug", "uploader", "status", "created_at", "updated_at")
+        extra_kwargs = {
+            "subject": {"required": False, "allow_blank": True, "default": ""},
+            "topic": {"required": False, "allow_blank": True, "default": ""},
+            "course": {"required": False, "allow_blank": True, "default": ""},
+            "semester": {"required": False, "allow_blank": True, "default": ""},
+        }
 
     @staticmethod
     def _count(instance: Resource, annotation_name: str, related_name: str) -> int:
@@ -232,6 +239,7 @@ class ResourceSerializer(serializers.ModelSerializer):
 
 
 class VideoSerializer(serializers.ModelSerializer):
+    description = serializers.CharField(max_length=5000, required=False, allow_blank=True, trim_whitespace=False)
     youtube_url = serializers.CharField(max_length=2048, write_only=True)
     youtube_video_id = serializers.CharField(read_only=True)
     original_url = serializers.URLField(read_only=True)
@@ -272,6 +280,12 @@ class VideoSerializer(serializers.ModelSerializer):
             "user_rating",
         )
         read_only_fields = ("id", "slug", "uploader", "status", "created_at", "updated_at")
+        extra_kwargs = {
+            "subject": {"required": False, "allow_blank": True, "default": ""},
+            "topic": {"required": False, "allow_blank": True, "default": ""},
+            "course": {"required": False, "allow_blank": True, "default": ""},
+            "semester": {"required": False, "allow_blank": True, "default": ""},
+        }
 
     def validate_youtube_url(self, value: str) -> str:
         try:

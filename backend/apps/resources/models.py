@@ -61,10 +61,10 @@ class Resource(models.Model):
     slug = models.SlugField(max_length=240, unique=True, blank=True)
     description = models.TextField(max_length=5000, blank=True)
     uploader = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="uploaded_resources")
-    subject = models.CharField(max_length=120, db_index=True)
-    topic = models.CharField(max_length=120, blank=True, db_index=True)
-    course = models.CharField(max_length=160, blank=True, db_index=True)
-    semester = models.CharField(max_length=80, blank=True, db_index=True)
+    subject = models.CharField(max_length=120, blank=True, default="", db_index=True)
+    topic = models.CharField(max_length=120, blank=True, default="", db_index=True)
+    course = models.CharField(max_length=160, blank=True, default="", db_index=True)
+    semester = models.CharField(max_length=80, blank=True, default="", db_index=True)
     academic_level = models.ForeignKey(
         "education.AcademicLevel", on_delete=models.SET_NULL, null=True, blank=True, related_name="resources"
     )
@@ -144,10 +144,10 @@ class Video(models.Model):
     youtube_video_id = models.CharField(max_length=11, unique=True)
     original_url = models.URLField(blank=True)
     thumbnail_url = models.URLField(blank=True)
-    subject = models.CharField(max_length=120, db_index=True)
-    topic = models.CharField(max_length=120, blank=True, db_index=True)
-    course = models.CharField(max_length=160, blank=True, db_index=True)
-    semester = models.CharField(max_length=80, blank=True, db_index=True)
+    subject = models.CharField(max_length=120, blank=True, default="", db_index=True)
+    topic = models.CharField(max_length=120, blank=True, default="", db_index=True)
+    course = models.CharField(max_length=160, blank=True, default="", db_index=True)
+    semester = models.CharField(max_length=80, blank=True, default="", db_index=True)
     academic_level = models.ForeignKey(
         "education.AcademicLevel", on_delete=models.SET_NULL, null=True, blank=True, related_name="videos"
     )

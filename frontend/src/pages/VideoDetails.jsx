@@ -30,14 +30,15 @@ function VideoMessage({ title, message, showBackLink = true, loadingLabel = '' }
 
 function ExpandableDescription({ description }) {
   const [expanded, setExpanded] = useState(false)
-  const text = typeof description === 'string' ? description.trim() : ''
+  const text = typeof description === 'string' ? description : ''
+  const hasText = Boolean(text.trim())
 
   return (
     <div>
-      <p className={`mt-3 min-h-[2.75rem] text-sm font-black leading-relaxed text-white/90 ${text && !expanded ? 'line-clamp-2' : ''}`}>
-        {text || 'No description available.'}
+      <p className={`mt-3 min-h-[2.75rem] whitespace-pre-wrap break-words text-sm font-black leading-relaxed text-white/90 ${hasText && !expanded ? 'line-clamp-2' : ''}`}>
+        {hasText ? text : 'No description available.'}
       </p>
-      {text ? (
+      {hasText ? (
         <button
           type="button"
           aria-expanded={expanded}
@@ -143,7 +144,7 @@ function VideoDetailsView({ slug }) {
           <YouTubePlayer videoId={video.youtubeVideoId} title={video.title} />
 
           <section className="mt-7 border-b-2 border-[var(--color-border-strong)] pb-5">
-            <h2 className="text-xl font-black text-white">{video.title}</h2>
+            <h2 className="text-3xl font-black text-white">{video.title}</h2>
             <div className="mt-4 flex flex-wrap items-center gap-5 text-sm font-black text-[var(--color-text)]">
               {stats.map(({ icon: Icon, value }) => <span key={value} className="inline-flex items-center gap-2"><Icon size={16} />{value}</span>)}
               <Rating value={video.rating} count={video.ratingCount} size={22} />

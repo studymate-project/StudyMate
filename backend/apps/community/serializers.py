@@ -85,6 +85,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 
 class AnswerSerializer(serializers.ModelSerializer):
+    body = serializers.CharField(max_length=10000, trim_whitespace=False)
     author = PublicUserSerializer(read_only=True)
     upvotes = serializers.SerializerMethodField()
 
@@ -96,6 +97,11 @@ class AnswerSerializer(serializers.ModelSerializer):
     def get_upvotes(self, answer: Answer) -> int:
         upvotes_count = getattr(answer, "upvotes_count", None)
         return upvotes_count if upvotes_count is not None else answer.upvotes.count()
+
+    def validate_body(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
 
 
 class ProfileAnswerSerializer(AnswerSerializer):

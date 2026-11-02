@@ -51,15 +51,16 @@ function SidebarLinkList({ title, items, pathPrefix }) {
 
 function ExpandableDescription({ heading, description, stats = [] }) {
   const [expanded, setExpanded] = useState(false)
-  const text = typeof description === 'string' ? description.trim() : ''
+  const text = typeof description === 'string' ? description : ''
+  const hasText = Boolean(text.trim())
 
   return (
     <div className="mt-6">
       <h2 className="text-base font-black text-white">{heading}</h2>
-      <p className={`mt-3 min-h-[2.75rem] text-base font-black leading-relaxed text-white/90 ${text && !expanded ? 'line-clamp-2' : ''}`}>
-        {text || 'No description available.'}
+      <p className={`mt-3 min-h-[2.75rem] whitespace-pre-wrap break-words text-base font-black leading-relaxed text-white/90 ${hasText && !expanded ? 'line-clamp-2' : ''}`}>
+        {hasText ? text : 'No description available.'}
       </p>
-      {text ? (
+      {hasText ? (
         <button
           type="button"
           aria-expanded={expanded}

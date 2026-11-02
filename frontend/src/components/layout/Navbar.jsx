@@ -72,8 +72,8 @@ function Navbar() {
           ))}
         </nav>
 
-        <div className="ml-auto hidden min-w-0 max-w-[330px] flex-1 justify-end sm:flex">
-          <SearchBar placeholder="Search notes, subjects, topics..." />
+          <div className="ml-auto hidden min-w-0 max-w-[330px] flex-1 justify-end sm:flex">
+            <SearchBar placeholder="Search notes, descriptions, topics..." />
         </div>
 
         <div className="ml-auto flex items-center gap-2 sm:ml-0">

@@ -10,8 +10,7 @@ function ExternalLinksSection() {
   return (
     <section className="page-section pb-12">
       <div className="section-inner">
-        <h2 className="section-title">External Links</h2>
-        <p className="section-copy">Useful study links shared by the StudyMate community</p>
+        <h2 className="section-title">External Links</h2>        
         {loading ? <ResourceGridSkeleton horizontal /> : null}
         {!loading && error && !resources.length ? <p className="mt-6 text-sm font-black text-[var(--color-text)]" role="alert">{getApiErrorMessage(error)}</p> : null}
         {!loading && error && resources.length ? <p className="mt-6 text-sm text-[var(--color-text)]" role="alert">We couldn&apos;t refresh external links. Showing the latest available results.</p> : null}
