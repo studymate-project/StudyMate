@@ -1,12 +1,13 @@
 import { BookOpen, Download, FileText, Save, Share2 } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { saveResource, unsaveResource } from '../../api/resources'
 import { getApiErrorMessage } from '../../api'
 import { trackResourceDownload } from '../../api/resources'
 import { useAuth } from '../../auth/useAuth'
 import { getLoginState } from '../../auth/navigation'
 import Badge from '../common/Badge'
+import Avatar from '../common/Avatar'
 import Button from '../common/Button'
 import IconButton from '../common/IconButton'
 import Rating from '../common/Rating'
@@ -93,9 +94,7 @@ function ResourceHeader({ resource, author, onDownloadCountChange, descriptionCo
               </Badge>
             ))}
           </div>
-          <p className="mt-3 text-sm font-black text-[var(--color-text)]">
-            Uploaded by {author?.name || 'StudyMate member'}{resource.uploadedAt ? ` - ${resource.uploadedAt}` : ''}
-          </p>
+          <div className="mt-3 flex items-center gap-2 text-sm font-black text-[var(--color-text)]">{author?.username ? <Link to={`/users/${encodeURIComponent(author.username)}`} aria-label={`View ${author.name} profile`}><Avatar user={author} size="sm" decorative /></Link> : <Avatar user={author} size="sm" decorative />}<span>Uploaded by {author?.username ? <Link to={`/users/${encodeURIComponent(author.username)}`} className="text-white hover:text-[var(--color-primary-light)]">{author.name}</Link> : author?.name || 'StudyMate member'}{resource.uploadedAt ? ` - ${resource.uploadedAt}` : ''}</span></div>
           <Rating value={resource.rating} count={resource.ratingCount} size={22} className="mt-3" />
         </div>
       </div>

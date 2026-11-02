@@ -1,4 +1,4 @@
-import { Bookmark, Eye, Share2, ThumbsUp, UserRound } from 'lucide-react'
+import { Bookmark, Eye, Share2, ThumbsUp } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -7,6 +7,7 @@ import { deleteVideoRating, fetchVideoDetail, getVideoBySlug, saveVideoRating } 
 import { getLoginState } from '../auth/navigation'
 import { useAuth } from '../auth/useAuth'
 import Button from '../components/common/Button'
+import Avatar from '../components/common/Avatar'
 import DiscussionPanel from '../components/common/DiscussionPanel'
 import IconButton from '../components/common/IconButton'
 import Rating from '../components/common/Rating'
@@ -22,8 +23,8 @@ function VideoMessage({ title, message, showBackLink = true, loadingLabel = '' }
   if (loadingLabel) return <VideoDetailSkeleton />
 
   return (
-    <div className="mx-auto flex max-w-[900px] justify-center px-5 py-20 text-center">
-      <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-[var(--color-text)]">{message}</p>{showBackLink ? <Button to="/explore" className="mt-7">Back to Explore</Button> : null}</div>
+    <div className="mx-auto flex max-w-225 justify-center px-5 py-20 text-center">
+      <div><h1 className="text-4xl font-black text-white">{title}</h1><p className="mt-4 font-bold text-(--color-text)">{message}</p>{showBackLink ? <Button to="/explore" className="mt-7">Back to Explore</Button> : null}</div>
     </div>
   )
 }
@@ -144,7 +145,7 @@ function VideoDetailsView({ slug }) {
           <YouTubePlayer videoId={video.youtubeVideoId} title={video.title} />
 
           <section className="mt-7 border-b-2 border-[var(--color-border-strong)] pb-5">
-            <h2 className="text-3xl font-black text-white">{video.title}</h2>
+            <h2 className="text-xl font-black text-white">{video.title}</h2>
             <div className="mt-4 flex flex-wrap items-center gap-5 text-sm font-black text-[var(--color-text)]">
               {stats.map(({ icon: Icon, value }) => <span key={value} className="inline-flex items-center gap-2"><Icon size={16} />{value}</span>)}
               <Rating value={video.rating} count={video.ratingCount} size={22} />
@@ -205,7 +206,7 @@ function VideoDetailsView({ slug }) {
         <aside className="space-y-5">
           <section className="p-5">
             <h2 className="text-sm font-black uppercase text-[var(--color-text)]">Uploaded By</h2>
-            <div className="mt-4 flex items-center gap-4"><Avatar /><div>{video.author?.username ? <Link to={`/users/${video.author.username}`} className="font-black text-white">{video.author.name}</Link> : <p className="font-black text-white">{video.author?.name || 'StudyMate member'}</p>}<p className="text-sm font-black text-[var(--color-text)]">{video.uploadedAt || 'Date unavailable'}</p></div></div>
+            <div className="mt-4 flex items-center gap-4">{video.author?.username ? <Link to={`/users/${video.author.username}`} aria-label={`View ${video.author.name} profile`}><Avatar user={video.author} decorative /></Link> : <Avatar user={video.author} decorative />}<div>{video.author?.username ? <Link to={`/users/${video.author.username}`} className="font-black text-white">{video.author.name}</Link> : <p className="font-black text-white">{video.author?.name || 'StudyMate member'}</p>}<p className="text-sm font-black text-[var(--color-text)]">{video.uploadedAt || 'Date unavailable'}</p></div></div>
             {video.author?.username ? <Button to={`/users/${video.author.username}`} className="mt-5 w-full">View Profile</Button> : null}
           </section>
         </aside>
@@ -217,10 +218,6 @@ function VideoDetailsView({ slug }) {
 function VideoDetails() {
   const { slug } = useParams()
   return <VideoDetailsView key={slug} slug={slug} />
-}
-
-function Avatar() {
-  return <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-primary-light)]"><UserRound size={21} /></span>
 }
 
 export default VideoDetails

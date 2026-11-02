@@ -95,6 +95,65 @@ class ListSearchAPITests(TestCase):
         self.assertEqual(phrase_ids[:2], [description_match.pk, classification_match.pk])
         self.assertIn(description_match.pk, self.result_ids(partial_response))
 
+    def test_home_resource_type_filters_separate_files_and_external_links(self):
+        file_resource = self.create_resource(
+            title="Uploaded file",
+            resource_type=Resource.ResourceType.FILE,
+            external_url="",
+        )
+        link_resource = self.create_resource(
+            title="External reference",
+            resource_type=Resource.ResourceType.LINK,
+            external_url="https://example.edu/reference",
+        )
+
+        files = self.client.get("/api/resources/", {"resource_type": "file"})
+        links = self.client.get("/api/resources/", {"resource_type": "link", "ordering": "latest"})
+
+        self.assertEqual(files.status_code, 200, files.data)
+        self.assertEqual(links.status_code, 200, links.data)
+        self.assertEqual(self.result_ids(files), [file_resource.pk])
+        self.assertEqual(self.result_ids(links), [link_resource.pk])
+
+    def test_external_link_latest_ordering_is_stable_across_pagination(self):
+        links = [
+            self.create_resource(
+                title=f"External link {index}",
+                resource_type=Resource.ResourceType.LINK,
+                external_url=f"https://example.edu/{index}",
+            )
+            for index in range(3)
+        ]
+        base_time = timezone.now()
+        for index, link in enumerate(links):
+            Resource.objects.filter(pk=link.pk).update(created_at=base_time + timedelta(seconds=index))
+
+        first_page = self.client.get(
+            "/api/resources/",
+            {"resource_type": "link", "ordering": "latest", "page": 1, "page_size": 2},
+        )
+        second_page = self.client.get(
+            "/api/resources/",
+            {"resource_type": "link", "ordering": "latest", "page": 2, "page_size": 2},
+        )
+
+        self.assertEqual(first_page.status_code, 200, first_page.data)
+        self.assertEqual(second_page.status_code, 200, second_page.data)
+        self.assertEqual(first_page.data["count"], len(links))
+        self.assertEqual(self.result_ids(first_page), [links[2].pk, links[1].pk])
+        self.assertEqual(self.result_ids(second_page), [links[0].pk])
+
+    def test_video_uploader_filter_is_applied_before_pagination(self):
+        owner_video = self.create_video(title="Owner profile video")
+        other_video = self.create_video(title="Other profile video", uploader=self.other_user)
+
+        response = self.client.get("/api/videos/", {"uploader": self.owner.pk, "page_size": 1})
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(self.result_ids(response), [owner_video.pk])
+        self.assertNotIn(other_video.pk, self.result_ids(response))
+
     def test_video_search_preserves_pagination_and_default_ordering(self):
         videos = [self.create_video(title=f"paged vidsearch video {index}") for index in range(21)]
         base_time = timezone.now()

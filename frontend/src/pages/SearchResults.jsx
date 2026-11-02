@@ -2,6 +2,7 @@ import { Bookmark, MessageCircle, Search, UserRound, Video as VideoIcon } from '
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Badge from '../components/common/Badge'
+import Avatar from '../components/common/Avatar'
 import Button from '../components/common/Button'
 import SearchSection from '../components/search/SearchSection'
 import { SearchResultsSkeleton } from '../components/common/Skeletons'
@@ -47,8 +48,11 @@ function ResultTypeIcon({ type }) {
 function SearchResultCard({ result }) {
   const route = getSearchResultRoute(result)
   const metadata = Object.entries(result.metadata || {})
-    .filter(([key, value]) => key !== 'youtube_video_id' && value !== null && value !== undefined && value !== '')
+    .filter(([key, value]) => !['avatar_url', 'youtube_video_id'].includes(key) && value !== null && value !== undefined && value !== '')
     .slice(0, 4)
+  const user = result.type === 'user'
+    ? { id: result.id, name: result.title, username: result.metadata?.username, avatarUrl: result.metadata?.avatar_url }
+    : null
 
   const content = (
     <>
@@ -63,7 +67,7 @@ function SearchResultCard({ result }) {
           </Badge>
         ))}
       </div>
-      <h3 className="mt-3 text-base font-black text-white">{result.title}</h3>
+      <div className="mt-3 flex items-center gap-3">{user ? <Avatar user={user} size="sm" decorative /> : null}<h3 className="text-base font-black text-white">{result.title}</h3></div>
       {result.snippet && <p className="mt-2 line-clamp-3 text-sm font-bold leading-6 text-[var(--color-text)]">{result.snippet}</p>}
       {typeof result.score === 'number' && (
         <p className="mt-3 text-xs font-black text-[var(--color-text-dim)]">Relevance {result.score.toFixed(3)}</p>

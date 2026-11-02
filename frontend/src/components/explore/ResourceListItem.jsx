@@ -2,6 +2,7 @@ import { FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { formatNumber, getUserById } from '../../data/dataHelpers'
 import Button from '../common/Button'
+import Avatar from '../common/Avatar'
 import Rating from '../common/Rating'
 
 function ResourceListItem({ resource }) {
@@ -18,9 +19,7 @@ function ResourceListItem({ resource }) {
         </div>
         <div className="min-w-0">
           <h3 className="truncate text-base font-black text-white sm:text-lg">{resource.title}</h3>
-          <p className="mt-1 text-sm font-black text-[var(--color-text)]">
-            {resource.type} <span aria-hidden="true">-</span> by {author?.name}
-          </p>
+          <p className="mt-1 flex items-center gap-2 text-sm font-black text-[var(--color-text)]"><Avatar user={author} size="xs" decorative />{resource.type} <span aria-hidden="true">-</span> by {author?.name || 'StudyMate member'}</p>
         </div>
       </Link>
 

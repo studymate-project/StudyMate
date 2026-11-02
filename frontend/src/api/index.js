@@ -37,6 +37,7 @@ export {
   getCurrentProfile,
   getPublicProfile,
   normalizeProfileResponse,
+  normalizeProfileVideo,
   unfollowProfile,
   updateProfile,
 } from './profile'

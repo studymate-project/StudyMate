@@ -1,4 +1,4 @@
-import { MessageSquare, Send, UserRound } from 'lucide-react'
+import { MessageSquare, Send } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { getApiErrorMessage } from '../../api'
@@ -12,17 +12,7 @@ import {
   unlikeDiscussionComment,
 } from '../../api/discussions'
 import { DiscussionSkeleton } from './Skeletons'
-
-function Avatar() {
-  return (
-    <span
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-primary-light)]"
-      aria-hidden="true"
-    >
-      <UserRound size={18} />
-    </span>
-  )
-}
+import Avatar from './Avatar'
 
 function authorName(author) {
   return author?.name || author?.username || 'StudyMate member'
@@ -44,7 +34,7 @@ function DiscussionMessage({ comment, onLike, onReply, pendingLikeId, isAuthenti
 
   return (
     <article className={`flex min-w-0 gap-3 px-2 py-1 ${isReply ? 'ml-8 sm:ml-12' : ''}`}>
-      <Avatar />
+      <Avatar user={comment.author} size="sm" decorative />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <h3 className="text-sm font-semibold text-white">{authorName(comment.author)}</h3>

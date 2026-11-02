@@ -4,12 +4,12 @@ import test from 'node:test'
 import { apiClient } from './client.js'
 import { clearResourceListCache, deleteResource, listAllSavedResources, listSavedResources, normalizeResource } from './resources.js'
 
-test('resource normalization preserves mixed resource types and open metadata', () => {
-  const file = normalizeResource({ id: 1, slug: 'notes', title: 'Notes', resource_type: 'pdf', file: '/media/notes.pdf', uploader: { id: 4, username: 'owner' } })
+test('resource normalization preserves mixed resource types and uploader avatars', () => {
+  const file = normalizeResource({ id: 1, slug: 'notes', title: 'Notes', resource_type: 'pdf', file: '/media/notes.pdf', uploader: { id: 4, username: 'owner', avatar_url: 'https://images.example.test/owner.png' } })
   const link = normalizeResource({ id: 2, slug: 'reference', title: 'Reference', resource_type: 'link', external_url: 'https://example.test/reference', uploader: { id: 4, username: 'owner' } })
   const video = normalizeResource({ id: 3, slug: 'lesson', title: 'Lesson', resource_type: 'video', uploader: { id: 4, username: 'owner' } })
 
-  assert.deepEqual([file.targetType, link.resourceType, link.resourceUrl, video.type], ['resource', 'link', 'https://example.test/reference', 'Video'])
+  assert.deepEqual([file.targetType, file.author.avatarUrl, link.resourceType, link.resourceUrl, video.type], ['resource', 'https://images.example.test/owner.png', 'link', 'https://example.test/reference', 'Video'])
 })
 
 test('saved resource pagination is collected without duplicate concurrent requests', async () => {

@@ -1,10 +1,12 @@
-import { BookOpen, MessageSquare, UserRound } from 'lucide-react'
+import { MessageSquare } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { followProfile, getApiErrorMessage, getPublicProfile, listQuestions, listResources, unfollowProfile } from '../api'
+import { followProfile, getApiErrorMessage, getPublicProfile, listAllResources, listAllVideos, listQuestions, normalizeProfileVideo, unfollowProfile } from '../api'
 import { getLoginState } from '../auth/navigation'
 import Button from '../components/common/Button'
+import Avatar from '../components/common/Avatar'
 import { PublicProfileSkeleton } from '../components/common/Skeletons'
+import ProfileResources from '../components/profile/ProfileResources'
 import { useAuth } from '../auth/useAuth'
 
 const initialState = { status: 'loading', queryKey: null, user: null, profile: null, resources: [], questions: [], error: null }
@@ -22,17 +24,23 @@ function UserProfile() {
 
     getPublicProfile(username).then(async (profileResult) => {
       const profileUserId = profileResult.user.id
-      const [resourceResult, questionResult] = await Promise.all([
-        listResources(profileUserId ? { uploader: profileUserId, page_size: 20 } : {}),
+      const [resourceResult, videoResult, questionResult] = await Promise.all([
+        listAllResources(profileUserId ? { uploader: profileUserId } : {}),
+        listAllVideos(profileUserId ? { uploader: profileUserId } : {}),
         listQuestions(profileUserId ? { author: profileUserId, page_size: 20 } : {}),
       ])
-      return [profileResult, resourceResult, questionResult]
+      return [profileResult, resourceResult, videoResult, questionResult]
     }).then(
-      ([profileResult, resourceResult, questionResult]) => {
+      ([profileResult, resourceResult, videoResult, questionResult]) => {
         if (!active) return
         const profileUsername = profileResult.user.username || username
         const matchesUsername = (value) => value?.toLowerCase() === profileUsername.toLowerCase()
-        const resources = resourceResult.resources.filter((resource) => matchesUsername(resource.author?.username))
+        const resources = resourceResult.resources
+          .filter((resource) => matchesUsername(resource.author?.username))
+          .concat(videoResult.videos
+            .filter((video) => matchesUsername(video.author?.username))
+            .map(normalizeProfileVideo))
+          .sort((first, second) => new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime())
         const questions = questionResult.questions.filter((question) => matchesUsername(question.author?.username))
         setState({
           status: 'success',
@@ -82,7 +90,7 @@ function UserProfile() {
     <div className="mx-auto w-full max-w-[1260px] px-5 py-8 sm:px-8 lg:px-10">
       <section className="p-6">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-primary-dark)] text-[var(--color-primary-light)]"><UserRound size={40} /></span>
+          <Avatar user={user} size="xl" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h1 className="text-4xl font-black text-white">{user.name}</h1>
@@ -103,9 +111,7 @@ function UserProfile() {
       </section>
 
       <div className="mt-7 grid gap-7 lg:grid-cols-2">
-        <ProfileList title="Resources Uploaded" empty="No resources uploaded yet.">
-          {resources.map((resource) => <Link key={resource.id} to={`/resources/${resource.slug}`} className="flex items-center gap-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-4"><BookOpen className="shrink-0 text-[var(--color-text)]" /><span className="min-w-0"><strong className="block truncate text-white">{resource.title}</strong><span className="text-sm font-black text-[var(--color-text)]">{resource.type}</span></span></Link>)}
-        </ProfileList>
+        <ProfileResources resources={resources} title="Shared by this User" empty="This user has not shared anything yet." />
         <ProfileList title="Questions Asked" empty="No questions asked yet.">
           {questions.map((question) => <Link key={question.id} to={`/questions/${question.slug}`} className="flex items-center gap-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] p-4"><MessageSquare className="shrink-0 text-[var(--color-primary-light)]" /><span className="min-w-0"><strong className="block text-white">{question.title}</strong><span className="text-sm font-black text-[var(--color-text)]">{question.upvotes ?? 0} Upvotes - {question.answerCount} Answers</span></span></Link>)}
         </ProfileList>

@@ -95,7 +95,7 @@ def get_visible_question(request, question_id):
 
 def visible_answer_queryset(request, question_id):
     question = get_visible_question(request, question_id)
-    answers = Answer.objects.select_related("question", "author").annotate(
+    answers = Answer.objects.select_related("question", "author", "author__student_profile").annotate(
         upvotes_count=Count("upvotes")
     ).filter(question_id=question.pk).order_by("created_at", "pk")
     if request.user.is_authenticated:
@@ -187,7 +187,7 @@ class QuestionViewSet(
         return super().get_throttles()
 
     def get_queryset(self):
-        queryset = Question.objects.select_related("author").prefetch_related("tags").annotate(
+        queryset = Question.objects.select_related("author", "author__student_profile").prefetch_related("tags").annotate(
             **_question_count_annotations(),
         ).order_by("-created_at", "-pk")
         if self.request.user.is_authenticated:
@@ -239,7 +239,7 @@ class ProfileAnswerListView(ListAPIView):
     permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
-        return Answer.objects.select_related("question", "author").annotate(
+        return Answer.objects.select_related("question", "author", "author__student_profile").annotate(
             upvotes_count=Count("upvotes")
         ).filter(
             author=self.request.user,

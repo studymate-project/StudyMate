@@ -5,7 +5,7 @@ import { ResourceGridSkeleton } from '../common/Skeletons'
 import ResourceCard from './ResourceCard'
 
 function TrendingResources() {
-  const { resources, loading, error } = useResourceList({ ordering: 'popular', page_size: 4 })
+  const { resources, loading, error } = useResourceList({ resource_type: 'file', ordering: 'popular', page_size: 4 })
 
   return (
     <section className="page-section">

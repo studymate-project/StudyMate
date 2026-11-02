@@ -1,10 +1,11 @@
-import { Bell, LogOut, Menu, Search, UserRound, X } from 'lucide-react'
+import { Bell, LogOut, Menu, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { getApiErrorMessage } from '../../api/errors'
 import { useAuth } from '../../auth/useAuth'
 import { preloadRoute } from '../../routes/routeLoaders'
 import IconButton from '../common/IconButton'
+import Avatar from '../common/Avatar'
 import SearchBar from '../common/SearchBar'
 
 const navItems = [
@@ -83,7 +84,7 @@ function Navbar() {
           <Link to="/notifications" aria-label="Notifications" className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-[var(--color-text)] transition-colors hover:border-[var(--color-border)] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]"><Bell size={20} /></Link>
           <div className="hidden sm:block">
             <Link to="/profile" aria-label="Your profile" className="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-primary-light)] transition-colors hover:bg-[var(--color-blue-hover)] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]">
-              {avatarUrl ? <img src={avatarUrl} alt={`${displayName} avatar`} className="h-full w-full object-cover" /> : <UserRound size={20} />}
+              <Avatar user={{ name: displayName, avatarUrl }} size="md" decorative />
             </Link>
           </div>
           {status === 'authenticated' ? <button type="button" onClick={handleLogout} disabled={isLoggingOut} aria-label="Log out" title={logoutError || 'Log out'} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-[var(--color-text)] transition-colors hover:border-[var(--color-border)] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-60"><LogOut size={19} /></button> : null}

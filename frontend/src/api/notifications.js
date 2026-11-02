@@ -84,6 +84,7 @@ export function normalizeNotification(notification) {
     actor: {
       id: actor?.id,
       username: actor?.username,
+      avatarUrl: actor?.avatar_url || null,
       initials: getInitials(actor),
       color: getActorColor(actor),
     },

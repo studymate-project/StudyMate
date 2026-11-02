@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { getApiErrorMessage, listAllSavedResources, unsaveResource } from '../api'
 import EmptyState from '../components/common/EmptyState'
 import Button from '../components/common/Button'
+import Avatar from '../components/common/Avatar'
 import { ResourceListSkeleton } from '../components/common/Skeletons'
 import Footer from '../components/layout/Footer'
 import Toast from '../components/common/Toast'
@@ -126,7 +127,7 @@ function SavedItem({ saved, isRemoving, onRemove }) {
           <span className="rounded-full bg-[var(--color-blue)] px-3 py-1 text-sm font-black text-white">{target.subject}</span>
           <span className="rounded-full border border-[var(--color-primary-light)] px-3 py-1 text-sm font-black text-[var(--color-primary-light)]">{target.type}</span>
         </div>
-        <p className="mt-3 text-sm font-black text-[var(--color-text)]">by {target.author?.name || 'StudyMate member'}</p>
+        <p className="mt-3 flex items-center gap-2 text-sm font-black text-[var(--color-text)]"><Avatar user={target.author} size="xs" decorative />by {target.author?.name || 'StudyMate member'}</p>
         <p className="mt-4 text-sm font-black text-[var(--color-text)]">{target.views == null ? 'View count unavailable' : `${Number(target.views).toLocaleString('en-IN')} Views`}</p>
       </Link>
 

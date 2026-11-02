@@ -42,7 +42,7 @@ class NotificationViewSet(ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return Notification.objects.filter(recipient=self.request.user).select_related(
-            "recipient", "actor", "content_type"
+            "recipient", "recipient__student_profile", "actor", "actor__student_profile", "content_type"
         ).order_by("-created_at", "-pk")
 
     @extend_schema(

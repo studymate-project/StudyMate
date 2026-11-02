@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { getApiErrorMessage } from '../api'
 import { fetchQuestionList } from '../api/questions'
 import Button from '../components/common/Button'
+import Avatar from '../components/common/Avatar'
 import QuestionDescription from '../components/community/QuestionDescription'
 import { QuestionListSkeleton } from '../components/common/Skeletons'
 import { QUERY_STALE_TIMES } from '../query/queryClient'
@@ -85,7 +86,7 @@ function CommunityQuestionCard({ question }) {
         <h2 className="break-words text-base font-black text-white">{question.title}</h2>
         <QuestionDescription description={question.body} className="relative mt-2" />
         <div className="mt-3 flex flex-wrap gap-2">{question.tags.map((tag) => <span key={tag} className="rounded-lg bg-[var(--color-primary)] px-3 py-1 font-black text-[var(--color-primary-dark)]">#{tag}</span>)}</div>
-        <p className="mt-3 text-sm font-black text-[var(--color-text)]">Asked by {author?.name || 'StudyMate member'} - {question.createdAt || 'Date unavailable'}</p>
+        <p className="mt-3 flex items-center gap-2 text-sm font-black text-[var(--color-text)]"><Avatar user={author} size="xs" decorative />Asked by {author?.name || 'StudyMate member'} - {question.createdAt || 'Date unavailable'}</p>
       </div>
       <div className="text-left sm:text-center">
         <p className="text-xl font-black text-white">{question.answerCount}</p>

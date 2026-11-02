@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import Avatar from '../common/Avatar'
 
 function ProfileHeader({
   user,
@@ -66,9 +67,7 @@ function AvatarPicker({ user, profile, editable, busy, error, onFile, onUrl }) {
     }
   }
 
-  const avatar = user.avatarUrl
-    ? <img src={user.avatarUrl} alt={`${user.name} avatar`} className="h-16 w-16 rounded-full object-cover" />
-    : <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-surface-muted)] text-xl font-bold text-[var(--color-text)]">{profile.initials}</span>
+  const avatar = <Avatar user={{ ...user, avatarUrl: user.avatarUrl || profile.avatarUrl }} size="xl" />
 
   if (!editable) return avatar
 

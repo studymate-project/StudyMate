@@ -804,6 +804,8 @@ class SerializerTests(TestCase):
         cls.answer = Answer.objects.create(question=cls.question, author=cls.other_user, body="Answer body")
 
     def test_core_serializers_expose_safe_fields(self):
+        self.profile.avatar_url = "https://images.example.test/serializer-avatar.png"
+        self.profile.save(update_fields=("avatar_url",))
         profile_data = StudentProfileSerializer(self.profile).data
         resource_data = ResourceSerializer(self.resource).data
         video_data = VideoSerializer(self.video).data
@@ -811,6 +813,9 @@ class SerializerTests(TestCase):
         answer_data = AnswerSerializer(self.answer).data
 
         self.assertNotIn("password", profile_data["user"])
+        self.assertEqual(resource_data["uploader"]["avatar_url"], self.profile.avatar_url)
+        self.assertEqual(video_data["uploader"]["avatar_url"], self.profile.avatar_url)
+        self.assertEqual(question_data["author"]["avatar_url"], self.profile.avatar_url)
         self.assertEqual(resource_data["uploader"]["username"], "serializer-user")
         self.assertEqual(resource_data["tags"][0]["slug"], "serializer-tag")
         self.assertEqual(video_data["youtube_video_id"], "AbCdEfGhIjK")

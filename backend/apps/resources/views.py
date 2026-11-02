@@ -562,6 +562,12 @@ VIDEO_LIST_PARAMETERS = [
         OpenApiParameter.QUERY,
         description="Search title, subject, topic, course, semester, description, or tags; maximum 200 characters.",
     ),
+    OpenApiParameter(
+        "uploader",
+        OpenApiTypes.INT,
+        OpenApiParameter.QUERY,
+        description="Filter videos owned by one user ID.",
+    ),
 ]
 
 RESOURCE_INTERACTION_RESPONSE = inline_serializer(
@@ -656,7 +662,7 @@ class ResourceViewSet(ModelViewSet):
         # ResourceSerializer only needs the uploader object and the academic
         # level primary key. Selecting academic_level here adds a join without
         # changing the serialized response; the FK id is already on Resource.
-        queryset = Resource.objects.select_related("uploader").prefetch_related("tags").annotate(
+        queryset = Resource.objects.select_related("uploader", "uploader__student_profile").prefetch_related("tags").annotate(
             **_resource_metric_subquery_annotations(),
             **_user_rating_annotation("resource", self.request.user),
         ).order_by("-created_at", "-pk")
@@ -963,7 +969,7 @@ class SavedResourceListView(ListAPIView):
         # Counting several reverse relations in one annotation query creates a
         # large intermediate join (views x downloads x saves x upvotes x
         # ratings) even though distinct() restores the final counts.
-        queryset = Resource.objects.select_related("uploader").prefetch_related("tags").annotate(
+        queryset = Resource.objects.select_related("uploader", "uploader__student_profile").prefetch_related("tags").annotate(
             **_resource_metric_subquery_annotations(),
             **_user_rating_annotation("resource", self.request.user),
             _is_saved=Value(True),
@@ -1001,7 +1007,7 @@ class VideoViewSet(DestroyModelMixin, ListModelMixin, RetrieveModelMixin, Create
         return super().get_throttles()
 
     def get_queryset(self):
-        queryset = Video.objects.select_related("uploader").prefetch_related("tags").annotate(
+        queryset = Video.objects.select_related("uploader", "uploader__student_profile").prefetch_related("tags").annotate(
             **_rating_annotations("video"),
             **_user_rating_annotation("video", self.request.user),
         ).order_by("-created_at", "-pk")
@@ -1013,6 +1019,16 @@ class VideoViewSet(DestroyModelMixin, ListModelMixin, RetrieveModelMixin, Create
         queryset = super().filter_queryset(queryset)
         if self.action != "list":
             return queryset
+
+        uploader = self.request.query_params.get("uploader")
+        if uploader is not None:
+            try:
+                uploader_id = int(uploader)
+            except (TypeError, ValueError):
+                return queryset.none()
+            if uploader_id < 1:
+                return queryset.none()
+            queryset = queryset.filter(uploader_id=uploader_id)
 
         search_term = normalize_search_query(self.request.query_params.get("search", ""), field_name="search")
         if not search_term:

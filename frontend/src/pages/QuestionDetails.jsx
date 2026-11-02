@@ -1,4 +1,4 @@
-import { ThumbsUp, UserRound } from 'lucide-react'
+import { ThumbsUp } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -7,6 +7,7 @@ import { fetchQuestionAnswers, fetchQuestionDetail } from '../api/questions'
 import { getLoginState } from '../auth/navigation'
 import { useAuth } from '../auth/useAuth'
 import Button from '../components/common/Button'
+import Avatar from '../components/common/Avatar'
 import QuestionDescription from '../components/community/QuestionDescription'
 import { QuestionDetailSkeleton } from '../components/common/Skeletons'
 import { QUERY_STALE_TIMES } from '../query/queryClient'
@@ -131,7 +132,7 @@ function QuestionDetailsView({ slug }) {
               {question.tags.map((tag) => <span key={tag} className="rounded-lg bg-[var(--color-primary)] px-3 py-2 text-base font-black text-[var(--color-primary-dark)]">{tag}</span>)}
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-4 text-sm font-black text-[var(--color-text)]">
-              <Avatar />
+              {question.author?.username ? <Link to={`/users/${question.author.username}`} aria-label={`View ${question.author.name} profile`}><Avatar user={question.author} decorative /></Link> : <Avatar user={question.author} decorative />}
               {question.author?.username ? <Link to={`/users/${question.author.username}`} className="text-white">{question.author.name}</Link> : <span className="text-white">{question.author?.name || 'StudyMate member'}</span>}
               <span> {question.createdAt || 'Date unavailable'}</span>
               <span> {displayedQuestionUpvotes} Upvotes</span>
@@ -178,7 +179,7 @@ function AnswerCard({ answer, voteState, onToggleVote }) {
   return (
     <article className=" p-5 sm:p-6">
       <div className="flex items-center gap-3">
-        <Avatar />
+        {author?.username ? <Link to={`/users/${author.username}`} aria-label={`View ${author.name} profile`}><Avatar user={author} decorative /></Link> : <Avatar user={author} decorative />}
         <div>
           {author?.username ? <Link to={`/users/${author.username}`} className="font-black text-white">{author.name}</Link> : <p className="font-black text-white">{author?.name || 'StudyMate member'}</p>}
           <p className="text-sm font-black text-[var(--color-text)]">{answer.createdAt || 'Date unavailable'}</p>
@@ -196,10 +197,6 @@ function AnswerCard({ answer, voteState, onToggleVote }) {
 function QuestionDetails() {
   const { slug } = useParams()
   return <QuestionDetailsView key={slug} slug={slug} />
-}
-
-function Avatar() {
-  return <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-primary-light)]"><UserRound size={21} /></span>
 }
 
 export default QuestionDetails

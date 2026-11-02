@@ -54,17 +54,17 @@ class NotificationSerializer(serializers.ModelSerializer):
         user_model = get_user_model()
         querysets = {}
         if Resource in targets_by_model:
-            querysets[Resource] = Resource.objects.filter(pk__in=targets_by_model[Resource])
+            querysets[Resource] = Resource.objects.select_related("uploader", "uploader__student_profile").filter(pk__in=targets_by_model[Resource])
         if Video in targets_by_model:
-            querysets[Video] = Video.objects.filter(pk__in=targets_by_model[Video])
+            querysets[Video] = Video.objects.select_related("uploader", "uploader__student_profile").filter(pk__in=targets_by_model[Video])
         if Question in targets_by_model:
-            querysets[Question] = Question.objects.filter(pk__in=targets_by_model[Question])
+            querysets[Question] = Question.objects.select_related("author", "author__student_profile").filter(pk__in=targets_by_model[Question])
         if Answer in targets_by_model:
-            querysets[Answer] = Answer.objects.select_related("question").filter(
+            querysets[Answer] = Answer.objects.select_related("question", "author", "author__student_profile").filter(
                 pk__in=targets_by_model[Answer]
             )
         if user_model in targets_by_model:
-            querysets[user_model] = user_model.objects.filter(pk__in=targets_by_model[user_model])
+            querysets[user_model] = user_model.objects.select_related("student_profile").filter(pk__in=targets_by_model[user_model])
         objects_by_key = {}
         for model, queryset in querysets.items():
             objects_by_key.update({(model, obj.pk): obj for obj in queryset})

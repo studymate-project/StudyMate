@@ -1,9 +1,10 @@
 import { getCurrentUser } from './auth'
 import { apiClient } from './client'
 import { listAcademicLevels, listCourses, listEducationBackgrounds } from './onboarding'
-import { listAllResources, listAllSavedResources } from './resources'
-import { listAllVideos } from './videos'
-import { listAnswersByAuthor, listQuestions } from './questions'
+import { clearResourceListCache, listAllResources, listAllSavedResources } from './resources'
+import { clearVideoListCache, listAllVideos } from './videos'
+import { clearQuestionListCache, listAnswersByAuthor, listQuestions } from './questions'
+import { clearNotificationCache } from './notifications'
 import { queryClient, QUERY_STALE_TIMES } from '../query/queryClient'
 import { profileKeys } from '../query/queryKeys'
 
@@ -45,7 +46,7 @@ function sameId(first, second) {
   return String(first) === String(second)
 }
 
-function normalizeProfileVideo(video) {
+export function normalizeProfileVideo(video) {
   return {
     id: video.id,
     targetType: 'video',
@@ -268,6 +269,10 @@ export function updateProfile(username, payload) {
     .patch(`/users/${encodeURIComponent(username)}/`, payload)
     .then((response) => {
       clearCurrentProfileCache()
+      clearResourceListCache()
+      clearVideoListCache()
+      clearQuestionListCache()
+      clearNotificationCache()
       queryClient.invalidateQueries({ queryKey: profileKeys.public(username.toLowerCase()) })
       return response.data
     })

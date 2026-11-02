@@ -1,5 +1,6 @@
-import { UserRound } from 'lucide-react'
 import Button from '../common/Button'
+import Avatar from '../common/Avatar'
+import { Link } from 'react-router-dom'
 
 function UploaderCard({ user = {} }) {
   const academicDetails = [user.course, user.semester].filter(Boolean).join(' - ')
@@ -13,9 +14,7 @@ function UploaderCard({ user = {} }) {
       <h2 className="text-base font-black text-white">About the Uploader</h2>
       <div className="mt-4 h-px bg-[var(--color-border-strong)]" />
       <div className="mt-5 flex items-center gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-dark)] text-[var(--color-primary-light)]">
-          <UserRound size={24} />
-        </div>
+        {user.username ? <Link to={`/users/${encodeURIComponent(user.username)}`} aria-label={`View ${user.name || 'uploader'} profile`}><Avatar user={user} size="lg" decorative /></Link> : <Avatar user={user} size="lg" decorative />}
         <div className="min-w-0">
           <h3 className="text-base font-black text-white">{user.name || 'StudyMate member'}</h3>
           <p className="text-sm font-black text-[var(--color-text)]">

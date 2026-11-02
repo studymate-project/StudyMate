@@ -277,7 +277,7 @@ def _candidate_user_rows(query: str, candidate_limit: int) -> list[dict[str, Any
                 "id": user.pk,
                 "title": display_name,
                 "snippet": _snippet(profile.bio if profile else ""),
-                "metadata": {"username": user.username},
+                "metadata": {"username": user.username, "avatar_url": profile.avatar_url if profile else ""},
                 "detail_url": reverse("user-profile-detail", kwargs={"identifier": user.username}),
                 "score": float(user._search_score or 0),
                 "_created_at": user.date_joined,

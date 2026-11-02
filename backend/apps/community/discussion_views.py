@@ -44,7 +44,7 @@ def _visible_discussion_queryset(request):
     # The serializer emits resource/video primary keys, not nested objects, so
     # their FK joins only add columns and work to the list query. The author is
     # still selected because PublicUserSerializer reads its fields.
-    comments = DiscussionComment.objects.select_related("author")
+    comments = DiscussionComment.objects.select_related("author", "author__student_profile")
     if request.user.is_authenticated:
         comments = comments.filter(Q(status=PublicationStatus.PUBLISHED) | Q(author=request.user))
     else:

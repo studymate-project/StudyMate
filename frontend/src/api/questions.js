@@ -22,6 +22,7 @@ function normalizeAuthor(author) {
   return {
     id: author.id,
     username: author.username,
+    avatarUrl: author.avatar_url || null,
     name: name || author.username || 'StudyMate member',
   }
 }

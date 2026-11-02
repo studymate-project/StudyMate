@@ -69,6 +69,7 @@ function formatAuthor(uploader) {
   return {
     id: uploader.id,
     username: uploader.username,
+    avatarUrl: uploader.avatar_url || null,
     name: name || uploader.username || 'StudyMate member',
   }
 }

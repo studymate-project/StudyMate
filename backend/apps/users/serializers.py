@@ -39,10 +39,16 @@ User = get_user_model()
 class PublicUserSerializer(serializers.ModelSerializer):
     """Safe identity summary for relationships in API responses."""
 
+    avatar_url = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ("id", "username", "first_name", "last_name")
+        fields = ("id", "username", "first_name", "last_name", "avatar_url")
         read_only_fields = fields
+
+    def get_avatar_url(self, user):
+        profile = getattr(user, "student_profile", None)
+        return profile.avatar_url if profile else ""
 
 
 class StudentProfileSerializer(serializers.ModelSerializer):

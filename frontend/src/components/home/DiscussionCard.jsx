@@ -1,5 +1,6 @@
 import { MessageSquare, Triangle } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import Avatar from '../common/Avatar'
 
 function DiscussionCard({ discussion }) {
   const author = discussion.author
@@ -13,7 +14,7 @@ function DiscussionCard({ discussion }) {
         <MessageSquare size={18} />
       </div>
       <h3 className="mt-5 min-h-[52px] text-base font-black leading-snug text-white">{discussion.title}</h3>
-      <p className="mt-3 text-sm font-black text-[var(--color-text)]">Asked by {author?.name || 'StudyMate member'}</p>
+      <p className="mt-3 flex items-center gap-2 text-sm font-black text-[var(--color-text)]"><Avatar user={author} size="xs" decorative />Asked by {author?.name || 'StudyMate member'}</p>
       <div className="mt-4 flex flex-wrap items-center gap-5 text-sm font-black">
         <span className="text-white">{discussion.answerCount}</span>
         <span className="inline-flex items-center gap-1 text-[var(--color-success)]">

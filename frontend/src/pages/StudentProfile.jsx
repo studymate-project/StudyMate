@@ -18,6 +18,7 @@ import {
   listSavedResources,
   listVideos,
   normalizeProfileResponse,
+  normalizeProfileVideo,
   unsaveResource,
   updateProfile,
 } from '../api'
@@ -198,16 +199,6 @@ function StudentProfile() {
         : <ProfileResources resources={savedResources} title="Saved resources" empty="No saved resources yet. Explore resources and save the ones you want to revisit." loading={savedQuery.isPending} errorMessage={savedError} onRetry={() => { void savedQuery.refetch() }} hasMore={savedQuery.hasNextPage} loadingMore={savedQuery.isFetchingNextPage} onLoadMore={loadMoreSaved} onUnsave={removeSavedResource} />
 
   return <><ProfileHeader user={profileData.user} profile={profileData.profile} editable avatarBusy={avatarState.status === 'loading'} avatarError={avatarState.error} onAvatarFile={updateAvatar} onAvatarUrl={updateAvatar} action={<Button to="/profile/edit" variant="secondary" className="min-h-9 px-4 text-sm">Edit Profile</Button>} /><main className="mx-auto min-h-[calc(100svh-26rem)] w-full max-w-[1260px] px-5 py-7 sm:px-8 lg:px-10"><ProfileDetails profile={profileData.profile} loading={educationQuery.isPending} errorMessage={educationQuery.isError ? getApiErrorMessage(educationQuery.error) : ''} onRetry={() => { void educationQuery.refetch() }} /><div className="mt-7 overflow-x-auto border-b border-[var(--color-border)]"><div className="flex min-w-max justify-between gap-7" role="tablist" aria-label="Profile content">{tabs.map((tab) => <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`min-h-12 border-b-[3px] px-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] ${activeTab === tab ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary-light)]' : 'border-transparent text-[var(--color-text)] hover:text-white'}`}>{tab}</button>)}</div></div><div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]"><section>{tabContent}</section><aside className="space-y-6"><Achievements achievements={profileData.profile.achievements} /><RecentQuestions questions={profileData.profile.recentQuestions} loading={questionsQuery.isPending} errorMessage={questionsError} onRetry={() => { void questionsQuery.refetch() }} showLoadMore={false} /></aside></div></main><Footer /></>
-}
-
-function normalizeProfileVideo(video) {
-  return {
-    ...video,
-    targetType: 'video',
-    type: 'Video',
-    resourceType: 'video',
-    resourceUrl: video.originalUrl || (video.youtubeVideoId ? `https://www.youtube.com/watch?v=${video.youtubeVideoId}` : null),
-  }
 }
 
 function ProfileDetails({ profile, loading, errorMessage, onRetry }) {

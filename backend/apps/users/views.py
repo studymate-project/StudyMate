@@ -50,7 +50,7 @@ class OnboardingView(APIView):
     )
     def post(self, request):
         profile = StudentProfile.objects.select_related(
-            "user", "education_background", "course", "academic_level"
+            "user", "user__student_profile", "education_background", "course", "academic_level"
         ).prefetch_related(
             Prefetch("student_interests", queryset=StudentInterest.objects.select_related("interest"))
         ).filter(user=request.user).first()
@@ -89,7 +89,7 @@ class StudentProfileViewSet(UpdateModelMixin, ReadOnlyModelViewSet):
     permission_classes = (IsProfileOwnerOrReadOnly,)
     lookup_url_kwarg = "identifier"
     queryset = StudentProfile.objects.select_related(
-        "user", "education_background", "course", "academic_level"
+        "user", "user__student_profile", "education_background", "course", "academic_level"
     ).prefetch_related(
         Prefetch("student_interests", queryset=StudentInterest.objects.select_related("interest"))
     ).order_by("pk")
