@@ -18,6 +18,7 @@ from apps.users.tasks import send_signup_verification_email_task
 @override_settings(
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     DEFAULT_FROM_EMAIL="no-reply@example.com",
+    SIGNUP_EMAIL_VERIFICATION_REQUIRED=True,
     CACHES={
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -71,7 +72,8 @@ class SignupEmailVerificationTests(TestCase):
             "detail": (
                 "If an account is awaiting verification for this email, the verification "
                 "request has been accepted."
-            )
+            ),
+            "verification_required": True,
         })
         self.assertNotIn("otp", str(response.data).lower())
         enqueue.assert_called_once()
@@ -314,6 +316,7 @@ class SignupEmailVerificationTests(TestCase):
 @override_settings(
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     DEFAULT_FROM_EMAIL="no-reply@example.com",
+    SIGNUP_EMAIL_VERIFICATION_REQUIRED=True,
     CACHES={
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",

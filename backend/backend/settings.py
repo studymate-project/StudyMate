@@ -415,6 +415,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Signup verification uses Django's configured email backend. Deployments can
 # provide their normal SMTP/backend settings without changing application code.
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='no-reply@studymate.local')
+# Email verification remains available as an opt-in flow. Keeping it disabled
+# by default means account creation does not depend on a Celery worker while
+# the product does not require verified email addresses.
+SIGNUP_EMAIL_VERIFICATION_REQUIRED = env.bool(
+    'SIGNUP_EMAIL_VERIFICATION_REQUIRED', default=False
+)
 SIGNUP_OTP_LENGTH = env.int('SIGNUP_OTP_LENGTH', default=6)
 SIGNUP_OTP_TTL_SECONDS = env.int('SIGNUP_OTP_TTL_SECONDS', default=600)
 SIGNUP_OTP_MAX_ATTEMPTS = env.int('SIGNUP_OTP_MAX_ATTEMPTS', default=5)

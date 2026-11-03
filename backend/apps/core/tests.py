@@ -2242,14 +2242,15 @@ class APIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 202)
         self.assertIn("detail", response.data)
+        self.assertFalse(response.data["verification_required"])
         self.assertNotIn("password", response.data)
         self.assertNotIn("access", response.data)
         self.assertNotIn("refresh", response.data)
 
         user = User.objects.get(email="signup.student@example.com")
         self.assertTrue(user.check_password("A-strong-signup-password-42!"))
-        self.assertFalse(user.is_active)
-        self.assertTrue(SignupEmailVerification.objects.filter(user=user).exists())
+        self.assertTrue(user.is_active)
+        self.assertFalse(SignupEmailVerification.objects.filter(user=user).exists())
         self.assertFalse(user.is_staff)
         self.assertIsNone(user.student_profile.course)
         self.assertEqual(

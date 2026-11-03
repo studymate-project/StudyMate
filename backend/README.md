@@ -218,9 +218,12 @@ unsafe cookie-authenticated requests. Future APIs can be grouped under `/api/aut
 `/api/notifications/`, and `/api/search/`.
 
 The backend includes the domain models, migrations, authentication/JWT flow,
-uploads, Cloudinary storage, and Celery-backed signup verification email
-delivery. Signup OTPs are sent by a separate worker through Django's configured
-email backend; the web process never sends them synchronously.
+uploads, Cloudinary storage, and optional Celery-backed signup verification email
+delivery. Email verification is disabled by default, so account creation and
+login do not require a worker. Set `SIGNUP_EMAIL_VERIFICATION_REQUIRED=True`
+only when the separate worker and Django email backend are deployed; in that
+mode signup waits for the email task to be queued and an inactive account
+cannot log in until verification succeeds.
 
 ### Render background worker
 

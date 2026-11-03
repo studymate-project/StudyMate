@@ -74,6 +74,13 @@ REGISTRATION_RESPONSE = inline_serializer(
         "profile": StudentProfileSerializer(read_only=True),
     },
 )
+SIGNUP_RESPONSE = inline_serializer(
+    "SignupResponse",
+    fields={
+        "detail": serializers.CharField(read_only=True),
+        "verification_required": serializers.BooleanField(read_only=True),
+    },
+)
 SIGNUP_VERIFICATION_RESPONSE = inline_serializer(
     "SignupVerificationResponse",
     fields={"detail": serializers.CharField(read_only=True)},
@@ -112,16 +119,16 @@ def enforce_cookie_csrf(request):
     post=extend_schema(
         summary="Create an account",
         description=(
-            "Create an inactive user and send a short-lived email verification code. "
-            "The account becomes usable only after the code is verified. Education "
-            "selections are completed during onboarding."
+            "Create an account. Email verification is used only when "
+            "SIGNUP_EMAIL_VERIFICATION_REQUIRED is enabled; education selections "
+            "are completed during onboarding."
         ),
         request=RegistrationSerializer,
-        responses={202: SIGNUP_VERIFICATION_RESPONSE, 400: BAD_REQUEST, 503: SIGNUP_VERIFICATION_RESPONSE},
+        responses={202: SIGNUP_RESPONSE, 400: BAD_REQUEST, 503: SIGNUP_VERIFICATION_RESPONSE},
     )
 )
 class SignupView(CreateAPIView):
-    """Create a pending account without authenticating it."""
+    """Create an account without authenticating it."""
 
     serializer_class = RegistrationSerializer
     permission_classes = (AllowAny,)
@@ -140,7 +147,10 @@ class SignupView(CreateAPIView):
                 normalized_email = None
             if normalized_email and User.objects.filter(email__iexact=normalized_email).exists():
                 return Response(
-                    {"detail": GENERIC_REQUEST_MESSAGE},
+                    {
+                        "detail": GENERIC_REQUEST_MESSAGE,
+                        "verification_required": settings.SIGNUP_EMAIL_VERIFICATION_REQUIRED,
+                    },
                     status=status.HTTP_202_ACCEPTED,
                 )
 
@@ -162,7 +172,10 @@ class SignupView(CreateAPIView):
                 status=status.HTTP_202_ACCEPTED,
             )
         return Response(
-            {"detail": GENERIC_REQUEST_MESSAGE},
+            {
+                "detail": GENERIC_REQUEST_MESSAGE,
+                "verification_required": settings.SIGNUP_EMAIL_VERIFICATION_REQUIRED,
+            },
             status=status.HTTP_202_ACCEPTED,
         )
 

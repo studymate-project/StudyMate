@@ -78,6 +78,13 @@ function Signup() {
       })
 
       if (result.status === 202) {
+        if (!result.verification_required) {
+          navigate('/login', {
+            replace: true,
+            state: { notice: 'Account created successfully. You can now log in.' },
+          })
+          return
+        }
         setStep('verification')
         setOtp('')
         setOtpError('')

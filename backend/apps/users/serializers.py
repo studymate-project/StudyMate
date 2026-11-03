@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -663,7 +664,7 @@ class RegistrationSerializer(serializers.Serializer):
             email=email,
             first_name=first_name,
             last_name=last_name,
-            is_active=False,
+            is_active=not settings.SIGNUP_EMAIL_VERIFICATION_REQUIRED,
         )
         user.set_password(password)
         user.save()
@@ -672,7 +673,8 @@ class RegistrationSerializer(serializers.Serializer):
             display_name=name,
             **validated_data,
         )
-        create_signup_verification(user=user)
+        if settings.SIGNUP_EMAIL_VERIFICATION_REQUIRED:
+            create_signup_verification(user=user)
         return user
 
     def to_representation(self, instance):
